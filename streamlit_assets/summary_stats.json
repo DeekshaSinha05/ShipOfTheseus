@@ -1,0 +1,25 @@
+{
+  "n_documents": 19049,
+  "datasets": [
+    "cmv",
+    "eli5",
+    "sci_gen",
+    "tldr",
+    "wp",
+    "xsum",
+    "yelp"
+  ],
+  "paraphrasers": [
+    "chatgpt",
+    "palm",
+    "dipper_low",
+    "dipper_bare",
+    "pegasus_slight",
+    "pegasus_full"
+  ],
+  "mean_sbert_t3": 0.8677796125411987,
+  "mean_pos_cos_t3": 0.9611518286727947,
+  "attr_f1_t0": 0.6041159701229988,
+  "attr_f1_t3": 0.6194184419473097,
+  "ponr_threshold": 0.55
+}

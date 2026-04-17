@@ -1,0 +1,3 @@
+.DS_Store
+streamlit_assets/rf_model.pkl
+streamlit_assets/trajectory.csv
