@@ -229,8 +229,9 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "⚓ Overview",
+        "📚 Datasets",
         "📉 Style Decay",
         "🔍 Style-Drift Explorer",
         "🚨 Point of No Return",
@@ -304,9 +305,211 @@ whose identity does the text ultimately bear: the original author's, or the mach
             st.markdown(f"**Paraphrasers ({len(paraphrasers)}):** " + " · ".join(f"`{p}`" for p in paraphrasers))
 
     # ══════════════════════════════════════════════════════════════════════════
-    # TAB 2 — STYLE DECAY
+    # TAB 2 — DATASETS
     # ══════════════════════════════════════════════════════════════════════════
     with tab2:
+        st.header("Dataset Explorer")
+        st.markdown("*Understand the seven source corpora used in this study.*")
+        st.divider()
+
+        DATASET_INFO = {
+            "cmv": {
+                "full_name": "Change My View (CMV)",
+                "source": "Reddit r/changemyview",
+                "domain": "Argumentative / Persuasion",
+                "src_group": "Human",
+                "description": (
+                    "Long-form Reddit posts where users present an opinion and invite others to "
+                    "challenge it. Rich in structured argumentation, hedging language, and "
+                    "complex sentence constructions — making it a demanding stylometric target."
+                ),
+            },
+            "eli5": {
+                "full_name": "Explain Like I'm 5 (ELI5)",
+                "source": "Reddit r/explainlikeimfive",
+                "domain": "Explanatory / Informal",
+                "src_group": "Human",
+                "description": (
+                    "Crowd-sourced simplified explanations of complex topics. Characterised by "
+                    "short sentences, high accessibility, use of analogies, and informal register. "
+                    "Contrasts sharply with academic corpora in lexical richness."
+                ),
+            },
+            "sci_gen": {
+                "full_name": "Scientific Paper Abstracts (SciGen)",
+                "source": "arXiv / Academic Papers",
+                "domain": "Scientific / Technical",
+                "src_group": "LLM",
+                "description": (
+                    "Abstracts from scientific publications spanning multiple disciplines. "
+                    "Dense noun phrases, passive constructions, and high type-token ratios "
+                    "are hallmarks. LLM-generated subset tests whether machine-written science "
+                    "is stylistically distinguishable from human-written science."
+                ),
+            },
+            "tldr": {
+                "full_name": "TL;DR Summaries",
+                "source": "Reddit (user-written summaries)",
+                "domain": "Summary / Informal",
+                "src_group": "Human",
+                "description": (
+                    "User-generated 'too long; didn't read' summaries of Reddit posts. "
+                    "Extremely compressed, colloquial, and often telegraphic — providing a "
+                    "low word-count edge case for stylometric analysis."
+                ),
+            },
+            "wp": {
+                "full_name": "Writing Prompts (WP)",
+                "source": "Reddit r/WritingPrompts",
+                "domain": "Creative Fiction",
+                "src_group": "Human",
+                "description": (
+                    "Creative short stories written in response to community prompts. "
+                    "High narrative variety, broad vocabulary, and expressive stylistic "
+                    "choices — one of the richest corpora for authorship attribution."
+                ),
+            },
+            "xsum": {
+                "full_name": "Extreme Summarisation (XSum)",
+                "source": "BBC News articles",
+                "domain": "News / Journalistic",
+                "src_group": "Human",
+                "description": (
+                    "Single-sentence summaries of BBC news articles. Formal journalistic "
+                    "register, consistent style conventions, and factual tone. Very short "
+                    "texts challenge paraphrasers to preserve meaning in minimal tokens."
+                ),
+            },
+            "yelp": {
+                "full_name": "Yelp Reviews",
+                "source": "Yelp Open Dataset",
+                "domain": "Review / Opinion",
+                "src_group": "Human",
+                "description": (
+                    "Consumer reviews spanning restaurants and businesses. Highly subjective, "
+                    "emotionally varied (positive / negative), and colloquial — providing "
+                    "sentiment-driven stylistic signals that are sensitive to paraphrasing."
+                ),
+            },
+        }
+
+        GROUP_BADGE = {
+            "Human": '<span style="background:#e3f2fd;color:#1565c0;padding:2px 10px;border-radius:12px;font-size:0.8rem;font-weight:600;">Human</span>',
+            "LLM":   '<span style="background:#fce4ec;color:#b71c1c;padding:2px 10px;border-radius:12px;font-size:0.8rem;font-weight:600;">LLM</span>',
+        }
+
+        fp_df_ds = load_fingerprint_features()
+
+        # ── Per-dataset stats ────────────────────────────────────────────────
+        ds_stats = (
+            fp_df_ds.groupby("dataset")
+            .agg(
+                n_samples=("ttr", "count"),
+                mean_ttr=("ttr", "mean"),
+                mean_words=("n_words", "mean"),
+                mean_sent_len=("avg_sent_len", "mean"),
+            )
+            .reset_index()
+        )
+
+        # ── Dataset cards ────────────────────────────────────────────────────
+        ds_keys = list(DATASET_INFO.keys())
+        for i in range(0, len(ds_keys), 2):
+            cols = st.columns(2)
+            for j, ds in enumerate(ds_keys[i:i+2]):
+                info = DATASET_INFO[ds]
+                row = ds_stats[ds_stats["dataset"] == ds]
+                n = int(row["n_samples"].values[0]) if not row.empty else 0
+                ttr = f"{row['mean_ttr'].values[0]:.3f}" if not row.empty else "—"
+                words = f"{row['mean_words'].values[0]:.0f}" if not row.empty else "—"
+                badge = GROUP_BADGE.get(info["src_group"], "")
+                with cols[j]:
+                    st.markdown(
+                        f"""
+                        <div style="border:1px solid #e0e4ea;border-radius:10px;padding:1rem 1.2rem;margin-bottom:0.5rem;background:#fafbfc;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:1.05rem;font-weight:700;">{info['full_name']}</span>
+                            {badge}
+                        </div>
+                        <div style="font-size:0.78rem;color:#888;margin:2px 0 6px 0;">{info['source']} &nbsp;·&nbsp; {info['domain']}</div>
+                        <div style="font-size:0.88rem;color:#444;margin-bottom:10px;">{info['description']}</div>
+                        <div style="display:flex;gap:1.5rem;">
+                            <div><span style="font-size:0.75rem;color:#888;">SAMPLES</span><br><strong>{n:,}</strong></div>
+                            <div><span style="font-size:0.75rem;color:#888;">MEAN TTR</span><br><strong>{ttr}</strong></div>
+                            <div><span style="font-size:0.75rem;color:#888;">MEAN WORDS</span><br><strong>{words}</strong></div>
+                        </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+        st.divider()
+
+        # ── Charts row ───────────────────────────────────────────────────────
+        cc1, cc2 = st.columns(2)
+
+        with cc1:
+            fig_cnt = px.bar(
+                ds_stats.sort_values("n_samples", ascending=False),
+                x="dataset", y="n_samples",
+                title="Sample Count per Dataset",
+                labels={"dataset": "Dataset", "n_samples": "Samples"},
+                color="n_samples", color_continuous_scale="Blues",
+                text="n_samples",
+            )
+            fig_cnt.update_traces(textposition="outside")
+            fig_cnt.update_layout(
+                template="plotly_white", height=370,
+                coloraxis_showscale=False, showlegend=False,
+            )
+            st.plotly_chart(fig_cnt, use_container_width=True)
+
+        with cc2:
+            fig_ttr_ds = px.box(
+                fp_df_ds, x="dataset", y="ttr",
+                title="Type-Token Ratio Distribution per Dataset",
+                labels={"dataset": "Dataset", "ttr": "TTR"},
+                color="dataset",
+                color_discrete_sequence=px.colors.qualitative.Set2,
+            )
+            fig_ttr_ds.update_layout(
+                template="plotly_white", height=370, showlegend=False,
+            )
+            st.plotly_chart(fig_ttr_ds, use_container_width=True)
+
+        cc3, cc4 = st.columns(2)
+
+        with cc3:
+            fig_words_ds = px.box(
+                fp_df_ds, x="dataset", y="n_words",
+                title="Word Count Distribution per Dataset",
+                labels={"dataset": "Dataset", "n_words": "Word Count"},
+                color="dataset",
+                color_discrete_sequence=px.colors.qualitative.Set2,
+            )
+            fig_words_ds.update_layout(
+                template="plotly_white", height=370, showlegend=False,
+            )
+            st.plotly_chart(fig_words_ds, use_container_width=True)
+
+        with cc4:
+            para_dist = fp_df_ds.groupby(["dataset", "label"]).size().reset_index(name="count")
+            fig_para = px.bar(
+                para_dist, x="dataset", y="count", color="label",
+                barmode="stack",
+                title="Paraphraser Sample Distribution per Dataset",
+                labels={"dataset": "Dataset", "count": "Samples", "label": "Paraphraser"},
+                color_discrete_sequence=PARAPHRASER_PALETTE,
+            )
+            fig_para.update_layout(
+                template="plotly_white", height=370,
+                legend=dict(orientation="h", y=-0.3),
+            )
+            st.plotly_chart(fig_para, use_container_width=True)
+
+    # TAB 3 — STYLE DECAY
+    # ══════════════════════════════════════════════════════════════════════════
+    with tab3:  # was tab2
         st.header("Style Decay — Multi-Modal Audit")
         st.markdown("*Structural skeleton vs. lexical skin: does syntax outlast vocabulary?*")
         st.divider()
@@ -381,9 +584,9 @@ whose identity does the text ultimately bear: the original author's, or the mach
         )
 
     # ══════════════════════════════════════════════════════════════════════════
-    # TAB 3 — STYLE-DRIFT EXPLORER (LIVE DEMO)
+    # TAB 4 — STYLE-DRIFT EXPLORER (LIVE DEMO)
     # ══════════════════════════════════════════════════════════════════════════
-    with tab3:
+    with tab4:
         st.header("Style-Drift Explorer — Live Demo")
         st.markdown("*Browse how original texts (T0) transform through three rounds of AI paraphrasing (T3).*")
 
@@ -551,9 +754,9 @@ whose identity does the text ultimately bear: the original author's, or the mach
             st.plotly_chart(fig_tsne, use_container_width=True)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # TAB 4 — POINT OF NO RETURN
+    # TAB 5 — POINT OF NO RETURN
     # ══════════════════════════════════════════════════════════════════════════
-    with tab4:
+    with tab5:
         st.header("Point of No Return — Authorship Attribution Decay")
         st.markdown(
             "*At what iteration does the model lose the ability to identify the original author?*"
@@ -666,9 +869,9 @@ whose identity does the text ultimately bear: the original author's, or the mach
         )
 
     # ══════════════════════════════════════════════════════════════════════════
-    # TAB 5 — PARAPHRASER FINGERPRINTS
+    # TAB 6 — PARAPHRASER FINGERPRINTS
     # ══════════════════════════════════════════════════════════════════════════
-    with tab5:
+    with tab6:
         st.header("Paraphraser Fingerprints — Forensic Stylometry")
         st.markdown(
             "*Can we identify which AI paraphrased a text from its linguistic signature?*"
