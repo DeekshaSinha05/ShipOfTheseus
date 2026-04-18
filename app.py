@@ -243,85 +243,24 @@ does the text ultimately bear?*
     # ── TAB 2 — DATASETS ────────────────────────────────────────────────────────
     with tab2:
         st.title("Dataset Explorer")
-        st.markdown("Source corpora used in this study, with per-dataset statistics and distributions.")
+        st.markdown("Source corpora, feature schema, and corpus-level distributions.")
         st.divider()
 
         DATASET_INFO = {
-            "cmv": {
-                "full_name": "Change My View (CMV)",
-                "source": "Reddit r/changemyview",
-                "domain": "Argumentative / Persuasion",
-                "origin": "Human",
-                "description": (
-                    "Long-form Reddit posts where users present an opinion and invite others to challenge it. "
-                    "Rich in structured argumentation, hedging language, and complex sentence constructions — "
-                    "making it a demanding stylometric target."
-                ),
-            },
-            "eli5": {
-                "full_name": "Explain Like I'm 5 (ELI5)",
-                "source": "Reddit r/explainlikeimfive",
-                "domain": "Explanatory / Informal",
-                "origin": "Human",
-                "description": (
-                    "Crowd-sourced simplified explanations of complex topics. Characterised by short sentences, "
-                    "high accessibility, use of analogies, and informal register. Contrasts sharply with academic "
-                    "corpora in lexical richness."
-                ),
-            },
-            "sci_gen": {
-                "full_name": "Scientific Paper Abstracts (SciGen)",
-                "source": "arXiv / Academic Papers",
-                "domain": "Scientific / Technical",
-                "origin": "Synthetic",
-                "description": (
-                    "Abstracts from scientific publications spanning multiple disciplines. Dense noun phrases, "
-                    "passive constructions, and high type-token ratios are hallmarks. Includes a synthetic subset "
-                    "to test stylometric distinguishability across origin types."
-                ),
-            },
-            "tldr": {
-                "full_name": "TL;DR Summaries",
-                "source": "Reddit (user-written summaries)",
-                "domain": "Summary / Informal",
-                "origin": "Human",
-                "description": (
-                    "User-generated 'too long; didn't read' summaries of Reddit posts. Extremely compressed, "
-                    "colloquial, and often telegraphic — providing a low word-count edge case for stylometric analysis."
-                ),
-            },
-            "wp": {
-                "full_name": "Writing Prompts (WP)",
-                "source": "Reddit r/WritingPrompts",
-                "domain": "Creative Fiction",
-                "origin": "Human",
-                "description": (
-                    "Creative short stories written in response to community prompts. High narrative variety, "
-                    "broad vocabulary, and expressive stylistic choices — one of the richest corpora for "
-                    "authorship attribution."
-                ),
-            },
-            "xsum": {
-                "full_name": "Extreme Summarisation (XSum)",
-                "source": "BBC News articles",
-                "domain": "News / Journalistic",
-                "origin": "Human",
-                "description": (
-                    "Single-sentence summaries of BBC news articles. Formal journalistic register, consistent "
-                    "style conventions, and factual tone. Very short texts challenge paraphrasers to preserve "
-                    "meaning in minimal tokens."
-                ),
-            },
-            "yelp": {
-                "full_name": "Yelp Reviews",
-                "source": "Yelp Open Dataset",
-                "domain": "Review / Opinion",
-                "origin": "Human",
-                "description": (
-                    "Consumer reviews spanning restaurants and businesses. Highly subjective, emotionally varied, "
-                    "and colloquial — providing sentiment-driven stylistic signals sensitive to paraphrasing."
-                ),
-            },
+            "cmv":     {"full_name": "Change My View (CMV)",              "source": "Reddit r/changemyview",          "domain": "Argumentative / Persuasion", "origin": "Human",
+                        "description": "Long-form Reddit posts where users present an opinion and invite others to challenge it. Rich in structured argumentation, hedging language, and complex sentence constructions."},
+            "eli5":    {"full_name": "Explain Like I'm 5 (ELI5)",         "source": "Reddit r/explainlikeimfive",     "domain": "Explanatory / Informal",     "origin": "Human",
+                        "description": "Crowd-sourced simplified explanations of complex topics. Short sentences, informal register, and heavy use of analogy — contrasts sharply with academic corpora in lexical richness."},
+            "sci_gen": {"full_name": "Scientific Abstracts (SciGen)",     "source": "arXiv / Academic Papers",        "domain": "Scientific / Technical",     "origin": "Synthetic",
+                        "description": "Abstracts from scientific publications. Dense noun phrases, passive constructions, and high type-token ratios. Includes a synthetic subset to test stylometric distinguishability across origin types."},
+            "tldr":    {"full_name": "TL;DR Summaries",                   "source": "Reddit (user-written)",          "domain": "Summary / Informal",         "origin": "Human",
+                        "description": "User-generated 'too long; didn't read' summaries of Reddit posts. Extremely compressed and telegraphic — a low word-count edge case for stylometric analysis."},
+            "wp":      {"full_name": "Writing Prompts (WP)",              "source": "Reddit r/WritingPrompts",        "domain": "Creative Fiction",           "origin": "Human",
+                        "description": "Creative short stories written in response to community prompts. High narrative variety, broad vocabulary, and expressive stylistic choices — one of the richest corpora for authorship attribution."},
+            "xsum":    {"full_name": "Extreme Summarisation (XSum)",      "source": "BBC News articles",              "domain": "News / Journalistic",        "origin": "Human",
+                        "description": "Single-sentence summaries of BBC news articles. Formal journalistic register and consistent style conventions. Very short texts challenge paraphrasers to preserve meaning in minimal tokens."},
+            "yelp":    {"full_name": "Yelp Reviews",                      "source": "Yelp Open Dataset",              "domain": "Review / Opinion",           "origin": "Human",
+                        "description": "Consumer reviews spanning restaurants and businesses. Highly subjective, emotionally varied, and colloquial — sentiment-driven stylistic signals sensitive to paraphrasing."},
         }
 
         fp_df_ds = load_fingerprint_features()
@@ -331,6 +270,7 @@ does the text ultimately bear?*
             .reset_index()
         )
 
+        # ── Corpus cards ─────────────────────────────────────────────────────
         for i in range(0, len(DATASET_INFO), 2):
             cols = st.columns(2)
             for j, (ds, info) in enumerate(list(DATASET_INFO.items())[i:i+2]):
@@ -357,6 +297,52 @@ does the text ultimately bear?*
 
         st.divider()
 
+        # ── Feature schema ────────────────────────────────────────────────────
+        st.markdown("#### Feature Schema")
+        st.markdown("Each record in the dataset represents one document paraphrased by one system. "
+                    "The columns below are the features extracted for stylometric analysis.")
+
+        SCHEMA = [
+            ("dataset",      "categorical", "cmv · eli5 · sci_gen · tldr · wp · xsum · yelp",              "Source corpus the document belongs to"),
+            ("label",        "categorical", "chatgpt · palm · dipper_low · dipper_bare · pegasus_slight · pegasus_full · dipper_high", "Paraphrasing system that produced this version"),
+            ("ttr",          "float  [0, 1]",  "0.0 – 1.0",   "Type-Token Ratio — unique words ÷ total words; higher = more lexical diversity"),
+            ("hapax_rate",   "float  [0, 1]",  "0.0 – 1.0",   "Hapax rate — words appearing exactly once ÷ total words; proxy for vocabulary novelty"),
+            ("avg_sent_len", "float  ≥ 0",     "typically 5 – 40",  "Mean number of words per sentence"),
+            ("avg_word_len", "float  ≥ 0",     "typically 4 – 7",   "Mean number of characters per word"),
+            ("punct_rate",   "float  [0, 1]",  "0.0 – 0.10",  "Punctuation density — punctuation characters ÷ total characters"),
+            ("n_words",      "float  ≥ 0",     "1 – 5,000+",  "Total word count of the document"),
+            ("n_sents",      "float  ≥ 0",     "1 – 500+",    "Total sentence count of the document"),
+            ("noun_rate",    "float  [0, 1]",  "0.0 – 1.0",   "Proportion of tokens tagged as nouns (POS)"),
+            ("verb_rate",    "float  [0, 1]",  "0.0 – 1.0",   "Proportion of tokens tagged as verbs (POS)"),
+            ("dep_depth",    "float  ≥ 0",     "typically 2 – 12",  "Mean dependency parse tree depth; higher = more complex syntactic nesting"),
+        ]
+
+        header = (
+            '<div style="background:white;border:1px solid #E2E8F0;border-radius:8px;overflow:hidden;margin-bottom:1.5rem;">'
+            '<table style="width:100%;border-collapse:collapse;font-size:.84rem;">'
+            '<thead><tr style="background:#F8FAFC;border-bottom:2px solid #E2E8F0;">'
+            '<th style="padding:.6rem 1rem;text-align:left;color:#475569;font-weight:600;white-space:nowrap;">Column</th>'
+            '<th style="padding:.6rem 1rem;text-align:left;color:#475569;font-weight:600;white-space:nowrap;">Type / Range</th>'
+            '<th style="padding:.6rem 1rem;text-align:left;color:#475569;font-weight:600;">Possible Values</th>'
+            '<th style="padding:.6rem 1rem;text-align:left;color:#475569;font-weight:600;">Description</th>'
+            '</tr></thead><tbody>'
+        )
+        rows_html = ""
+        for idx, (col, typ, vals, desc) in enumerate(SCHEMA):
+            bg = "#FFFFFF" if idx % 2 == 0 else "#F8FAFC"
+            rows_html += (
+                f'<tr style="background:{bg};border-bottom:1px solid #F1F5F9;">'
+                f'<td style="padding:.55rem 1rem;font-family:monospace;color:#2563EB;white-space:nowrap;font-weight:600;">{col}</td>'
+                f'<td style="padding:.55rem 1rem;white-space:nowrap;color:#64748B;">{typ}</td>'
+                f'<td style="padding:.55rem 1rem;color:#374151;max-width:260px;">{vals}</td>'
+                f'<td style="padding:.55rem 1rem;color:#374151;">{desc}</td>'
+                f'</tr>'
+            )
+        st.markdown(header + rows_html + "</tbody></table></div>", unsafe_allow_html=True)
+
+        st.divider()
+
+        # ── Two focused charts ────────────────────────────────────────────────
         ca, cb = st.columns(2)
         with ca:
             fig = px.bar(
@@ -373,33 +359,10 @@ does the text ultimately bear?*
             st.plotly_chart(fig, use_container_width=True)
 
         with cb:
-            fig = px.box(
-                fp_df_ds, x="dataset", y="ttr",
-                title="Type-Token Ratio Distribution per Corpus",
-                labels={"dataset": "Corpus", "ttr": "TTR"},
-                color="dataset", color_discrete_sequence=PARA_PALETTE,
-            )
-            fig.update_layout(template="plotly_white", height=360,
-                              showlegend=False, margin=dict(t=50, b=40))
-            st.plotly_chart(fig, use_container_width=True)
-
-        cc, cd = st.columns(2)
-        with cc:
-            fig = px.box(
-                fp_df_ds, x="dataset", y="n_words",
-                title="Word Count Distribution per Corpus",
-                labels={"dataset": "Corpus", "n_words": "Word Count"},
-                color="dataset", color_discrete_sequence=PARA_PALETTE,
-            )
-            fig.update_layout(template="plotly_white", height=360,
-                              showlegend=False, margin=dict(t=50, b=40))
-            st.plotly_chart(fig, use_container_width=True)
-
-        with cd:
             para_dist = fp_df_ds.groupby(["dataset", "label"]).size().reset_index(name="count")
             fig = px.bar(
                 para_dist, x="dataset", y="count", color="label", barmode="stack",
-                title="Paraphraser Distribution per Corpus",
+                title="Paraphraser Coverage per Corpus",
                 labels={"dataset": "Corpus", "count": "Samples", "label": "Paraphraser"},
                 color_discrete_sequence=PARA_PALETTE,
             )
