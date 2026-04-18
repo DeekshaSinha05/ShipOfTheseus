@@ -55,6 +55,11 @@ def load_ds_fingerprint_f1() -> dict:
         return json.load(f)
 
 @st.cache_data
+def load_dataset_stats() -> dict:
+    with open(f"{ASSETS}/dataset_stats.json") as f:
+        return json.load(f)
+
+@st.cache_data
 def load_attribution_f1() -> pd.DataFrame:
     return pd.read_csv(f"{ASSETS}/attribution_f1.csv")
 
@@ -289,21 +294,16 @@ does the text ultimately bear?*
                         "description": "Consumer reviews spanning restaurants and businesses. Highly subjective, emotionally varied, and colloquial — sentiment-driven stylistic signals sensitive to paraphrasing."},
         }
 
-        fp_df_ds = load_fingerprint_features()
-        ds_stats = (
-            fp_df_ds.groupby("dataset")
-            .agg(n_samples=("ttr", "count"), mean_ttr=("ttr", "mean"), mean_words=("n_words", "mean"))
-            .reset_index()
-        )
+        raw_stats = load_dataset_stats()
 
         # ── Corpus cards ─────────────────────────────────────────────────────
         for i in range(0, len(DATASET_INFO), 2):
             cols = st.columns(2)
             for j, (ds, info) in enumerate(list(DATASET_INFO.items())[i:i+2]):
-                row = ds_stats[ds_stats["dataset"] == ds]
-                n     = int(row["n_samples"].values[0]) if not row.empty else 0
-                ttr   = f"{row['mean_ttr'].values[0]:.3f}" if not row.empty else "—"
-                words = f"{row['mean_words'].values[0]:.0f}" if not row.empty else "—"
+                s = raw_stats.get(ds, {})
+                n_docs  = s.get("unique_docs", "—")
+                n_rows  = s.get("total_rows", "—")
+                words   = s.get("mean_word_count", "—")
                 badge_cls = "badge-syn" if info["origin"] == "Synthetic" else "badge-human"
                 with cols[j]:
                     st.markdown(f"""
@@ -315,8 +315,8 @@ does the text ultimately bear?*
                       <div class="ds-meta">{info['source']} &nbsp;·&nbsp; {info['domain']}</div>
                       <div class="ds-body">{info['description']}</div>
                       <div style="display:flex;gap:2rem;">
-                        <div><div class="stat-lbl">Samples</div><div class="stat-val">{n:,}</div></div>
-                        <div><div class="stat-lbl">Mean TTR</div><div class="stat-val">{ttr}</div></div>
+                        <div><div class="stat-lbl">Unique Docs</div><div class="stat-val">{n_docs:,}</div></div>
+                        <div><div class="stat-lbl">Total Rows</div><div class="stat-val">{n_rows:,}</div></div>
                         <div><div class="stat-lbl">Mean Words</div><div class="stat-val">{words}</div></div>
                       </div>
                     </div>""", unsafe_allow_html=True)
@@ -373,14 +373,20 @@ does the text ultimately bear?*
         st.divider()
 
         # ── Two focused charts ────────────────────────────────────────────────
+        chart_df = pd.DataFrame([
+            {"corpus": ds, "unique_docs": v["unique_docs"], "total_rows": v["total_rows"],
+             "mean_words": v["mean_word_count"]}
+            for ds, v in raw_stats.items()
+        ])
+
         ca, cb = st.columns(2)
         with ca:
             fig = px.bar(
-                ds_stats.sort_values("n_samples", ascending=False),
-                x="dataset", y="n_samples",
-                title="Sample Count per Corpus",
-                labels={"dataset": "Corpus", "n_samples": "Samples"},
-                color="n_samples", color_continuous_scale="Blues", text="n_samples",
+                chart_df.sort_values("unique_docs", ascending=False),
+                x="corpus", y="unique_docs",
+                title="Unique Documents per Corpus",
+                labels={"corpus": "Corpus", "unique_docs": "Unique Documents"},
+                color="unique_docs", color_continuous_scale="Blues", text="unique_docs",
             )
             fig.update_traces(textposition="outside")
             fig.update_layout(template="plotly_white", height=360,
@@ -389,12 +395,16 @@ does the text ultimately bear?*
             st.plotly_chart(fig, use_container_width=True)
 
         with cb:
-            para_dist = fp_df_ds.groupby(["dataset", "label"]).size().reset_index(name="count")
+            src_rows = []
+            for ds, v in raw_stats.items():
+                for src, cnt in v["sources"].items():
+                    src_rows.append({"corpus": ds, "source": src, "count": cnt})
+            src_df = pd.DataFrame(src_rows)
             fig = px.bar(
-                para_dist, x="dataset", y="count", color="label", barmode="stack",
-                title="Paraphraser Coverage per Corpus",
-                labels={"dataset": "Corpus", "count": "Samples", "label": "Paraphraser"},
-                color_discrete_sequence=PARA_PALETTE,
+                src_df, x="corpus", y="count", color="source", barmode="stack",
+                title="Text Source Distribution per Corpus",
+                labels={"corpus": "Corpus", "count": "Rows", "source": "Source"},
+                color_discrete_sequence=px.colors.qualitative.Pastel,
             )
             fig.update_layout(template="plotly_white", height=360,
                               legend=dict(orientation="h", y=-0.3, font=dict(size=11)),
