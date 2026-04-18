@@ -162,6 +162,32 @@ hr {border-color:#E2E8F0 !important;}
 """
 
 
+def _render_schema_table(schema: list):
+    header = (
+        '<div style="background:white;border:1px solid #E2E8F0;border-radius:8px;'
+        'overflow:hidden;margin:0.75rem 0 1.25rem;">'
+        '<table style="width:100%;border-collapse:collapse;font-size:.84rem;">'
+        '<thead><tr style="background:#F8FAFC;border-bottom:2px solid #E2E8F0;">'
+        '<th style="padding:.6rem 1rem;text-align:left;color:#475569;font-weight:600;white-space:nowrap;">Column</th>'
+        '<th style="padding:.6rem 1rem;text-align:left;color:#475569;font-weight:600;white-space:nowrap;">Type / Range</th>'
+        '<th style="padding:.6rem 1rem;text-align:left;color:#475569;font-weight:600;">Possible Values</th>'
+        '<th style="padding:.6rem 1rem;text-align:left;color:#475569;font-weight:600;">Description</th>'
+        '</tr></thead><tbody>'
+    )
+    rows = ""
+    for i, (col, typ, vals, desc) in enumerate(schema):
+        bg = "#FFFFFF" if i % 2 == 0 else "#F8FAFC"
+        rows += (
+            f'<tr style="background:{bg};border-bottom:1px solid #F1F5F9;">'
+            f'<td style="padding:.5rem 1rem;font-family:monospace;color:#2563EB;white-space:nowrap;font-weight:600;">{col}</td>'
+            f'<td style="padding:.5rem 1rem;white-space:nowrap;color:#64748B;">{typ}</td>'
+            f'<td style="padding:.5rem 1rem;color:#374151;">{vals}</td>'
+            f'<td style="padding:.5rem 1rem;color:#374151;">{desc}</td>'
+            f'</tr>'
+        )
+    st.markdown(header + rows + "</tbody></table></div>", unsafe_allow_html=True)
+
+
 def main():
     st.markdown(CSS, unsafe_allow_html=True)
     summary = load_summary_stats()
@@ -298,47 +324,51 @@ does the text ultimately bear?*
         st.divider()
 
         # ── Feature schema ────────────────────────────────────────────────────
-        st.markdown("#### Feature Schema")
-        st.markdown("Each record in the dataset represents one document paraphrased by one system. "
-                    "The columns below are the features extracted for stylometric analysis.")
+        st.markdown("#### Data Schema")
 
-        SCHEMA = [
-            ("dataset",      "categorical", "cmv · eli5 · sci_gen · tldr · wp · xsum · yelp",              "Source corpus the document belongs to"),
-            ("label",        "categorical", "chatgpt · palm · dipper_low · dipper_bare · pegasus_slight · pegasus_full · dipper_high", "Paraphrasing system that produced this version"),
-            ("ttr",          "float  [0, 1]",  "0.0 – 1.0",   "Type-Token Ratio — unique words ÷ total words; higher = more lexical diversity"),
-            ("hapax_rate",   "float  [0, 1]",  "0.0 – 1.0",   "Hapax rate — words appearing exactly once ÷ total words; proxy for vocabulary novelty"),
-            ("avg_sent_len", "float  ≥ 0",     "typically 5 – 40",  "Mean number of words per sentence"),
-            ("avg_word_len", "float  ≥ 0",     "typically 4 – 7",   "Mean number of characters per word"),
-            ("punct_rate",   "float  [0, 1]",  "0.0 – 0.10",  "Punctuation density — punctuation characters ÷ total characters"),
-            ("n_words",      "float  ≥ 0",     "1 – 5,000+",  "Total word count of the document"),
-            ("n_sents",      "float  ≥ 0",     "1 – 500+",    "Total sentence count of the document"),
-            ("noun_rate",    "float  [0, 1]",  "0.0 – 1.0",   "Proportion of tokens tagged as nouns (POS)"),
-            ("verb_rate",    "float  [0, 1]",  "0.0 – 1.0",   "Proportion of tokens tagged as verbs (POS)"),
-            ("dep_depth",    "float  ≥ 0",     "typically 2 – 12",  "Mean dependency parse tree depth; higher = more complex syntactic nesting"),
-        ]
+        schema_tab1, schema_tab2 = st.tabs(["Raw Paraphrase Files  (corpus_paraphrased.csv)", "Feature Dataset  (fingerprint_features.csv)"])
 
-        header = (
-            '<div style="background:white;border:1px solid #E2E8F0;border-radius:8px;overflow:hidden;margin-bottom:1.5rem;">'
-            '<table style="width:100%;border-collapse:collapse;font-size:.84rem;">'
-            '<thead><tr style="background:#F8FAFC;border-bottom:2px solid #E2E8F0;">'
-            '<th style="padding:.6rem 1rem;text-align:left;color:#475569;font-weight:600;white-space:nowrap;">Column</th>'
-            '<th style="padding:.6rem 1rem;text-align:left;color:#475569;font-weight:600;white-space:nowrap;">Type / Range</th>'
-            '<th style="padding:.6rem 1rem;text-align:left;color:#475569;font-weight:600;">Possible Values</th>'
-            '<th style="padding:.6rem 1rem;text-align:left;color:#475569;font-weight:600;">Description</th>'
-            '</tr></thead><tbody>'
-        )
-        rows_html = ""
-        for idx, (col, typ, vals, desc) in enumerate(SCHEMA):
-            bg = "#FFFFFF" if idx % 2 == 0 else "#F8FAFC"
-            rows_html += (
-                f'<tr style="background:{bg};border-bottom:1px solid #F1F5F9;">'
-                f'<td style="padding:.55rem 1rem;font-family:monospace;color:#2563EB;white-space:nowrap;font-weight:600;">{col}</td>'
-                f'<td style="padding:.55rem 1rem;white-space:nowrap;color:#64748B;">{typ}</td>'
-                f'<td style="padding:.55rem 1rem;color:#374151;max-width:260px;">{vals}</td>'
-                f'<td style="padding:.55rem 1rem;color:#374151;">{desc}</td>'
-                f'</tr>'
+        with schema_tab1:
+            st.markdown(
+                "One file per corpus (e.g. `cmv_paraphrased.csv`). Each row is one version of one document — "
+                "original or paraphrased. Columns:"
             )
-        st.markdown(header + rows_html + "</tbody></table></div>", unsafe_allow_html=True)
+            RAW_SCHEMA = [
+                ("source",       "categorical", "Human · OpenAI · PaLM · BigScience · Eleuther-AI · LLAMA · Tsinghua",
+                 "Origin of the text — identifies the model or organisation that produced the original document"),
+                ("key",          "string",      "e.g. cmv-258 · eli5-034 · xsum-112",
+                 "Unique document identifier linking all versions (original + paraphrases) of the same text"),
+                ("text",         "string",      "free text (variable length)",
+                 "The actual text content — either the original document or one paraphrased version of it"),
+                ("version_name", "categorical",
+                 "original · chatgpt · chatgpt_chatgpt · chatgpt_chatgpt_chatgpt · palm · palm_palm · palm_palm_palm · "
+                 "dipper(low) · dipper(low)_dipper(low) · dipper(low)_dipper(low)_dipper(low) · "
+                 "dipper(high) · pegasus(slight) · pegasus(full) · …",
+                 "Encodes which paraphraser was applied and how many times. "
+                 "Single name = T1, doubled = T2, tripled = T3. 'original' = T0 baseline."),
+            ]
+            _render_schema_table(RAW_SCHEMA)
+
+        with schema_tab2:
+            st.markdown(
+                "Each record represents one document version with its extracted stylometric features. "
+                "Used for fingerprinting and classification. Columns:"
+            )
+            FEAT_SCHEMA = [
+                ("dataset",      "categorical", "cmv · eli5 · sci_gen · tldr · wp · xsum · yelp",              "Source corpus the document belongs to"),
+                ("label",        "categorical", "chatgpt · palm · dipper_low · dipper_bare · pegasus_slight · pegasus_full · dipper_high", "Paraphrasing system that produced this version"),
+                ("ttr",          "float  [0, 1]",  "0.0 – 1.0",         "Type-Token Ratio — unique words ÷ total words; higher = more lexical diversity"),
+                ("hapax_rate",   "float  [0, 1]",  "0.0 – 1.0",         "Proportion of words appearing exactly once; proxy for vocabulary novelty"),
+                ("avg_sent_len", "float  ≥ 0",     "typically 5 – 40",  "Mean number of words per sentence"),
+                ("avg_word_len", "float  ≥ 0",     "typically 4 – 7",   "Mean number of characters per word"),
+                ("punct_rate",   "float  [0, 1]",  "0.0 – 0.10",        "Punctuation density — punctuation characters ÷ total characters"),
+                ("n_words",      "float  ≥ 0",     "1 – 5,000+",        "Total word count of the document"),
+                ("n_sents",      "float  ≥ 0",     "1 – 500+",          "Total sentence count of the document"),
+                ("noun_rate",    "float  [0, 1]",  "0.0 – 1.0",         "Proportion of tokens tagged as nouns (POS)"),
+                ("verb_rate",    "float  [0, 1]",  "0.0 – 1.0",         "Proportion of tokens tagged as verbs (POS)"),
+                ("dep_depth",    "float  ≥ 0",     "typically 2 – 12",  "Mean dependency parse tree depth; higher = more syntactic nesting"),
+            ]
+            _render_schema_table(FEAT_SCHEMA)
 
         st.divider()
 
