@@ -84,6 +84,10 @@ def load_linguistic_delta() -> pd.DataFrame:
     return pd.read_csv(f"{ASSETS}/linguistic_delta.csv")
 
 @st.cache_data
+def load_dep_depth() -> pd.DataFrame:
+    return pd.read_csv(f"{ASSETS}/dep_depth_by_iteration.csv")
+
+@st.cache_data
 def load_fingerprint_features() -> pd.DataFrame:
     return pd.read_csv(f"{ASSETS}/fingerprint_features.csv")
 
@@ -464,26 +468,35 @@ does the text ultimately bear?*
 
         st.divider()
         st.markdown("#### Multi-Modal Decay — Normalized to T0")
+        dep_df  = load_dep_depth()
         norm_rows = []
         for para, grp in ling_df.groupby("paraphraser"):
-            t0_row = grp[grp["iteration"] == "T0"]
-            if t0_row.empty:
+            t0_rttr = grp.loc[grp["iteration"] == "T0", "RTTR"].values
+            if not len(t0_rttr):
                 continue
-            t0_rttr = t0_row["RTTR"].values[0]
-            t0_sent = t0_row["Avg Sent Len"].values[0]
+            t0_rttr = t0_rttr[0]
+            dep_grp = dep_df[dep_df["paraphraser"] == para]
+            t0_dep  = dep_grp.loc[dep_grp["iteration"] == "T0", "dep_depth"].values
+            if not len(t0_dep):
+                continue
+            t0_dep = t0_dep[0]
             for _, row in grp.iterrows():
+                dep_row = dep_grp[dep_grp["iteration"] == row["iteration"]]
+                dep_val = dep_row["dep_depth"].values[0] if len(dep_row) else None
+                if dep_val is None:
+                    continue
                 norm_rows.append({
                     "Iteration": row["iteration"],
-                    "Structural (Avg Sent Len)": row["Avg Sent Len"] / t0_sent if t0_sent else 1.0,
+                    "Structural (Dep-Depth)": dep_val / t0_dep if t0_dep else 1.0,
                     "Lexical (RTTR)": row["RTTR"] / t0_rttr if t0_rttr else 1.0,
                 })
-        norm_df   = pd.DataFrame(norm_rows).groupby("Iteration")[["Structural (Avg Sent Len)", "Lexical (RTTR)"]].mean().reset_index()
+        norm_df   = pd.DataFrame(norm_rows).groupby("Iteration")[["Structural (Dep-Depth)", "Lexical (RTTR)"]].mean().reset_index()
         norm_long = norm_df.melt(id_vars="Iteration", var_name="Metric", value_name="Normalized Value")
         fig_norm  = px.line(
             norm_long, x="Iteration", y="Normalized Value", color="Metric", markers=True,
             title="Structural vs. Lexical Decay (Normalized to T0 = 1.0)",
             labels={"Iteration": "Iteration", "Normalized Value": "Relative to T0", "Metric": "Dimension"},
-            color_discrete_map={"Structural (Avg Sent Len)": "#3B82F6", "Lexical (RTTR)": "#F59E0B"},
+            color_discrete_map={"Structural (Dep-Depth)": "#3B82F6", "Lexical (RTTR)": "#F59E0B"},
         )
         fig_norm.add_hline(y=1.0, line_dash="dot", line_color="#94A3B8", line_width=1,
                            annotation_text="T0 baseline", annotation_position="top left",
