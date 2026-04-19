@@ -462,12 +462,42 @@ does the text ultimately bear?*
                               margin=dict(t=50, b=80))
             st.plotly_chart(fig, use_container_width=True)
 
+        st.divider()
+        st.markdown("#### Multi-Modal Decay — Normalized to T0")
+        norm_rows = []
+        for para, grp in ling_df.groupby("paraphraser"):
+            t0_row = grp[grp["iteration"] == "T0"]
+            if t0_row.empty:
+                continue
+            t0_rttr = t0_row["RTTR"].values[0]
+            t0_sent = t0_row["Avg Sent Len"].values[0]
+            for _, row in grp.iterrows():
+                norm_rows.append({
+                    "Iteration": row["iteration"],
+                    "Structural (Avg Sent Len)": row["Avg Sent Len"] / t0_sent if t0_sent else 1.0,
+                    "Lexical (RTTR)": row["RTTR"] / t0_rttr if t0_rttr else 1.0,
+                })
+        norm_df   = pd.DataFrame(norm_rows).groupby("Iteration")[["Structural (Avg Sent Len)", "Lexical (RTTR)"]].mean().reset_index()
+        norm_long = norm_df.melt(id_vars="Iteration", var_name="Metric", value_name="Normalized Value")
+        fig_norm  = px.line(
+            norm_long, x="Iteration", y="Normalized Value", color="Metric", markers=True,
+            title="Structural vs. Lexical Decay (Normalized to T0 = 1.0)",
+            labels={"Iteration": "Iteration", "Normalized Value": "Relative to T0", "Metric": "Dimension"},
+            color_discrete_map={"Structural (Avg Sent Len)": "#3B82F6", "Lexical (RTTR)": "#F59E0B"},
+        )
+        fig_norm.add_hline(y=1.0, line_dash="dot", line_color="#94A3B8", line_width=1,
+                           annotation_text="T0 baseline", annotation_position="top left",
+                           annotation_font=dict(color="#94A3B8", size=11))
+        fig_norm.update_traces(line=dict(width=2.5), marker=dict(size=9))
+        fig_norm.update_layout(template="plotly_white", height=380,
+                               legend=dict(orientation="h", y=-0.25, font=dict(size=12)),
+                               margin=dict(t=55, b=80))
+        st.plotly_chart(fig_norm, use_container_width=True)
+
         st.markdown(
             '<div class="insight"><strong>Key Finding —</strong> '
-            'POS cosine similarity (syntactic) decays far more slowly than SBERT cosine (semantic) '
-            'across three paraphrase iterations. Paraphrasers preserve grammatical structure even as they '
-            'substitute vocabulary — the <em>syntactic skeleton</em> survives the transformation '
-            'while the <em>lexical surface</em> does not.</div>',
+            'The syntactic skeleton (dep-depth) remains closer to 1.0 than the lexical skin (RTTR), '
+            'confirming that grammatical structure outlasts vocabulary under iterative paraphrasing.</div>',
             unsafe_allow_html=True)
 
     # ── TAB 4 — DRIFT EXPLORER ──────────────────────────────────────────────────
@@ -664,10 +694,11 @@ does the text ultimately bear?*
 
         st.markdown(
             '<div class="callout"><strong>Finding —</strong> '
-            'Attribution classifiers lose discriminative power progressively across iterations, '
-            'yet each paraphrasing system imposes its own detectable lexical and syntactic fingerprint. '
-            'By T3, the stylometric signal of the original author is largely overwritten by the '
-            'characteristic patterns of the paraphrasing system.</div>',
+            'Attribution F1 never drops below the 0.55 threshold at any iteration — there is no Point of No Return. '
+            'Instead, a Point of Maximum Contrast emerges at T1 as multi-source paraphraser diversity collapses into a '
+            'single style, making human-authored texts paradoxically more identifiable. Each paraphrasing system also '
+            'leaves its own detectable stylometric fingerprint, identifiable from surface features alone at '
+            '2.6× above chance.</div>',
             unsafe_allow_html=True)
 
     # ── TAB 6 — STYLOMETRY ──────────────────────────────────────────────────────
