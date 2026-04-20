@@ -56,7 +56,10 @@ def load_ds_fingerprint_f1() -> dict:
 
 @st.cache_data
 def load_dataset_stats() -> dict:
-    with open(f"{ASSETS}/dataset_stats.json") as f:
+    path = f"{ASSETS}/dataset_stats.json"
+    if not os.path.exists(path):
+        return {}
+    with open(path) as f:
         return json.load(f)
 
 @st.cache_data
@@ -85,7 +88,15 @@ def load_linguistic_delta() -> pd.DataFrame:
 
 @st.cache_data
 def load_dep_depth() -> pd.DataFrame:
-    return pd.read_csv(f"{ASSETS}/dep_depth_by_iteration.csv")
+    return pd.read_csv(f"{ASSETS}/dep_depth_decay.csv")
+
+@st.cache_data
+def load_feature_importances() -> pd.DataFrame:
+    return pd.read_csv(f"{ASSETS}/feature_importances.csv", index_col=0)
+
+@st.cache_data
+def load_rq1_decay_summary() -> pd.DataFrame:
+    return pd.read_csv(f"{ASSETS}/rq1_decay_summary.csv")
 
 @st.cache_data
 def load_fingerprint_features() -> pd.DataFrame:
@@ -376,44 +387,46 @@ does the text ultimately bear?*
 
         st.divider()
 
-        # ── Two focused charts ────────────────────────────────────────────────
-        chart_df = pd.DataFrame([
-            {"corpus": ds, "unique_docs": v["unique_docs"], "total_rows": v["total_rows"],
-             "mean_words": v["mean_word_count"]}
-            for ds, v in raw_stats.items()
-        ])
+        # ── Two focused charts (only when raw_stats available) ────────────────
+        if raw_stats:
+            chart_df = pd.DataFrame([
+                {"corpus": ds, "unique_docs": v["unique_docs"], "total_rows": v["total_rows"],
+                 "mean_words": v["mean_word_count"]}
+                for ds, v in raw_stats.items()
+            ])
 
-        ca, cb = st.columns(2)
-        with ca:
-            fig = px.bar(
-                chart_df.sort_values("unique_docs", ascending=False),
-                x="corpus", y="unique_docs",
-                title="Unique Documents per Corpus",
-                labels={"corpus": "Corpus", "unique_docs": "Unique Documents"},
-                color="unique_docs", color_continuous_scale="Blues", text="unique_docs",
-            )
-            fig.update_traces(textposition="outside")
-            fig.update_layout(template="plotly_white", height=360,
-                              coloraxis_showscale=False, showlegend=False,
-                              margin=dict(t=50, b=40))
-            st.plotly_chart(fig, use_container_width=True)
+            ca, cb = st.columns(2)
+            with ca:
+                fig = px.bar(
+                    chart_df.sort_values("unique_docs", ascending=False),
+                    x="corpus", y="unique_docs",
+                    title="Unique Documents per Corpus",
+                    labels={"corpus": "Corpus", "unique_docs": "Unique Documents"},
+                    color="unique_docs", color_continuous_scale="Blues", text="unique_docs",
+                )
+                fig.update_traces(textposition="outside")
+                fig.update_layout(template="plotly_white", height=360,
+                                  coloraxis_showscale=False, showlegend=False,
+                                  margin=dict(t=50, b=40))
+                st.plotly_chart(fig, use_container_width=True)
 
-        with cb:
-            src_rows = []
-            for ds, v in raw_stats.items():
-                for src, cnt in v["sources"].items():
-                    src_rows.append({"corpus": ds, "source": src, "count": cnt})
-            src_df = pd.DataFrame(src_rows)
-            fig = px.bar(
-                src_df, x="corpus", y="count", color="source", barmode="stack",
-                title="Text Source Distribution per Corpus",
-                labels={"corpus": "Corpus", "count": "Rows", "source": "Source"},
-                color_discrete_sequence=px.colors.qualitative.Pastel,
-            )
-            fig.update_layout(template="plotly_white", height=360,
-                              legend=dict(orientation="h", y=-0.3, font=dict(size=11)),
-                              margin=dict(t=50, b=80))
-            st.plotly_chart(fig, use_container_width=True)
+            with cb:
+                src_rows = []
+                for ds, v in raw_stats.items():
+                    for src, cnt in v.get("sources", {}).items():
+                        src_rows.append({"corpus": ds, "source": src, "count": cnt})
+                if src_rows:
+                    src_df = pd.DataFrame(src_rows)
+                    fig = px.bar(
+                        src_df, x="corpus", y="count", color="source", barmode="stack",
+                        title="Text Source Distribution per Corpus",
+                        labels={"corpus": "Corpus", "count": "Rows", "source": "Source"},
+                        color_discrete_sequence=px.colors.qualitative.Pastel,
+                    )
+                    fig.update_layout(template="plotly_white", height=360,
+                                      legend=dict(orientation="h", y=-0.3, font=dict(size=11)),
+                                      margin=dict(t=50, b=80))
+                    st.plotly_chart(fig, use_container_width=True)
 
     # ── TAB 3 — STYLE DECAY ─────────────────────────────────────────────────────
     with tab3:
@@ -629,16 +642,33 @@ does the text ultimately bear?*
         st.markdown("At what iteration does attribution performance drop below a meaningful threshold?")
         st.divider()
 
-        attr_df     = load_attribution_f1()
+        attr_wide   = load_attribution_f1()
         clf_results = load_clf_results()
         ds_f1       = load_ds_fingerprint_f1()
         ponr        = summary.get("ponr_threshold", 0.55)
 
-        marker_colors = [ITER_COLORS.get(it, "#888") for it in attr_df["iteration"]]
+        # Reshape wide → long, then compute per-iteration mean
+        iter_cols = [c for c in ["T0", "T1", "T2", "T3"] if c in attr_wide.columns]
+        attr_long = attr_wide.melt(id_vars="paraphraser", value_vars=iter_cols,
+                                   var_name="iteration", value_name="f1")
+        attr_mean = attr_long.groupby("iteration", sort=False)["f1"].mean().reindex(iter_cols).reset_index()
+        attr_mean.columns = ["iteration", "f1"]
+
         fig_f1 = go.Figure()
+        # Per-paraphraser light traces
+        for para, grp in attr_long.groupby("paraphraser"):
+            grp = grp.set_index("iteration").reindex(iter_cols).reset_index()
+            fig_f1.add_trace(go.Scatter(
+                x=grp["iteration"], y=grp["f1"],
+                mode="lines", name=para, opacity=0.35,
+                line=dict(width=1.2, dash="dot"),
+                hovertemplate=f"{para}: %{{y:.3f}}<extra></extra>",
+            ))
+        # Mean line
+        marker_colors = [ITER_COLORS.get(it, "#888") for it in attr_mean["iteration"]]
         fig_f1.add_trace(go.Scatter(
-            x=attr_df["iteration"], y=attr_df["f1"],
-            mode="lines+markers", name="Attribution F1",
+            x=attr_mean["iteration"], y=attr_mean["f1"],
+            mode="lines+markers", name="Mean F1",
             line=dict(color="#3B82F6", width=3),
             marker=dict(size=11, color=marker_colors, line=dict(width=1.5, color="white")),
         ))
@@ -646,12 +676,12 @@ does the text ultimately bear?*
             annotation_text=f"Threshold  (F1 = {ponr})",
             annotation_position="top right",
             annotation_font=dict(color="#EF4444", size=12))
-        below = attr_df[attr_df["f1"] < ponr]
-        if not below.empty:
-            rb = below.iloc[0]
+        below_mean = attr_mean[attr_mean["f1"] < ponr]
+        if not below_mean.empty:
+            rb = below_mean.iloc[0]
             fig_f1.add_annotation(
                 x=rb["iteration"], y=rb["f1"],
-                text=f"Below threshold @ {rb['iteration']}",
+                text=f"Mean below threshold @ {rb['iteration']}",
                 showarrow=True, arrowhead=2, arrowcolor="#EF4444",
                 font=dict(color="#EF4444", size=11), ax=60, ay=-40)
         fig_f1.update_layout(
@@ -659,8 +689,9 @@ does the text ultimately bear?*
             xaxis_title="Iteration", yaxis_title="Macro F1",
             yaxis=dict(range=[0.0, 1.0], gridcolor="#F1F5F9"),
             xaxis=dict(gridcolor="#F1F5F9"),
-            template="plotly_white", height=390,
-            legend=dict(orientation="h"), margin=dict(t=55, b=45))
+            template="plotly_white", height=420,
+            legend=dict(orientation="h", y=-0.2, font=dict(size=11)),
+            margin=dict(t=55, b=80))
         st.plotly_chart(fig_f1, use_container_width=True)
 
         st.divider()
