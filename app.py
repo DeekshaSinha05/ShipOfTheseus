@@ -476,16 +476,18 @@ does the text ultimately bear?*
                     drift_chart(sbert_stats, "Semantic Identity Drift (SBERT Cosine) — Mean ± SD", "#EF4444", 0.55),
                     use_container_width=True)
         else:
+            _ord_map = {v: i for i, v in enumerate(ITER_ORDER)}
+
             pos_long   = _wide_to_long(pos_df,   "POS Cosine")
             sbert_long = _wide_to_long(sbert_df, "SBERT Cosine")
-            for _dl in [pos_long, sbert_long]:
-                _dl["iteration"] = pd.Categorical(_dl["iteration"],
-                                                  categories=ITER_ORDER, ordered=True)
+            pos_long   = pos_long.assign(_o=pos_long["iteration"].map(_ord_map)).sort_values(["paraphraser","_o"]).drop(columns="_o").reset_index(drop=True)
+            sbert_long = sbert_long.assign(_o=sbert_long["iteration"].map(_ord_map)).sort_values(["paraphraser","_o"]).drop(columns="_o").reset_index(drop=True)
 
             with c1:
                 fig = px.line(
-                    pos_long.sort_values("iteration"),
+                    pos_long,
                     x="iteration", y="POS Cosine", color="paraphraser", markers=True,
+                    category_orders={"iteration": ITER_ORDER},
                     title="Syntactic Structure Stability (POS Cosine) — per Paraphraser",
                     labels={"iteration": "Iteration", "POS Cosine": "Cosine Similarity",
                             "paraphraser": "Paraphraser"},
@@ -498,8 +500,9 @@ does the text ultimately bear?*
 
             with c2:
                 fig = px.line(
-                    sbert_long.sort_values("iteration"),
+                    sbert_long,
                     x="iteration", y="SBERT Cosine", color="paraphraser", markers=True,
+                    category_orders={"iteration": ITER_ORDER},
                     title="Semantic Identity Drift (SBERT Cosine) — per Paraphraser",
                     labels={"iteration": "Iteration", "SBERT Cosine": "Cosine Similarity",
                             "paraphraser": "Paraphraser"},
