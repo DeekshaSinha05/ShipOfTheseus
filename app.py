@@ -647,14 +647,24 @@ does the text ultimately bear?*
         ds_f1       = load_ds_fingerprint_f1()
         ponr        = summary.get("ponr_threshold", 0.55)
 
-        # Reshape wide → long, then compute per-iteration mean
         # Normalise column names (strip BOM / whitespace that Cloud CSV readers may add)
+        attr_wide = attr_wide.copy()
         attr_wide.columns = [c.strip().lstrip("\ufeff") for c in attr_wide.columns]
-        iter_cols  = [c for c in ["T0", "T1", "T2", "T3"] if c in attr_wide.columns]
-        id_col     = attr_wide.columns[0]   # first non-iteration column ("paraphraser")
-        attr_long  = attr_wide.melt(id_vars=id_col, value_vars=iter_cols,
-                                    var_name="iteration", value_name="f1")
-        attr_long  = attr_long.rename(columns={id_col: "paraphraser"})
+        iter_cols = [c for c in ["T0", "T1", "T2", "T3"] if c in attr_wide.columns]
+
+        if iter_cols:
+            # Wide format: paraphraser | T0 | T1 | T2 | T3
+            id_col    = next((c for c in attr_wide.columns if c not in iter_cols), attr_wide.columns[0])
+            attr_long = attr_wide.melt(id_vars=id_col, value_vars=iter_cols,
+                                       var_name="iteration", value_name="f1")
+            attr_long = attr_long.rename(columns={id_col: "paraphraser"})
+        else:
+            # Legacy format: iteration | f1
+            attr_long = attr_wide.rename(columns={attr_wide.columns[0]: "iteration",
+                                                   attr_wide.columns[1]: "f1"})
+            attr_long["paraphraser"] = "mean"
+            iter_cols = [c for c in ["T0", "T1", "T2", "T3"] if c in attr_long["iteration"].values]
+
         attr_mean = attr_long.groupby("iteration", sort=False)["f1"].mean().reindex(iter_cols).reset_index()
         attr_mean.columns = ["iteration", "f1"]
 
