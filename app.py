@@ -509,39 +509,69 @@ does the text ultimately bear?*
         decay_view = st.radio("View:", ["Aggregate", "Per Paraphraser"],
                               horizontal=True, key="decay_view")
 
+        iter_order = ["T0", "T1", "T2", "T3"]
+
         if decay_view == "Aggregate":
-            norm_long = norm_agg_df.melt(id_vars="Iteration", var_name="Metric", value_name="Normalized Value")
-            fig_norm  = px.line(
-                norm_long, x="Iteration", y="Normalized Value", color="Metric", markers=True,
-                title="Structural vs. Lexical Decay (Normalized to T0 = 1.0)",
-                labels={"Iteration": "Iteration", "Normalized Value": "Relative to T0", "Metric": "Dimension"},
-                color_discrete_map={"Structural (Dep-Depth)": "#3B82F6", "Lexical (RTTR)": "#F59E0B"},
-            )
+            # Two lines with data labels at each point
+            fig_norm = go.Figure()
+            metric_cfg = [
+                ("Structural (Dep-Depth)", "#3B82F6", "Dep-Depth (structural skeleton)"),
+                ("Lexical (RTTR)",         "#EF4444", "RTTR (lexical diversity)"),
+            ]
+            for col, color, label in metric_cfg:
+                vals = norm_agg_df.set_index("Iteration").reindex(iter_order)[col].tolist()
+                fig_norm.add_trace(go.Scatter(
+                    x=iter_order, y=vals, mode="lines+markers+text",
+                    name=label, line=dict(color=color, width=2.5),
+                    marker=dict(size=9, color=color),
+                    text=[f"{v:.3f}" for v in vals],
+                    textposition="top center", textfont=dict(size=11, color=color),
+                ))
             fig_norm.add_hline(y=1.0, line_dash="dot", line_color="#94A3B8", line_width=1,
                                annotation_text="T0 baseline", annotation_position="top left",
                                annotation_font=dict(color="#94A3B8", size=11))
-            fig_norm.update_traces(line=dict(width=2.5), marker=dict(size=9))
-            fig_norm.update_layout(template="plotly_white", height=380,
-                                   legend=dict(orientation="h", y=-0.25, font=dict(size=12)),
-                                   margin=dict(t=55, b=80))
+            fig_norm.update_layout(
+                title="Multi-Modal Decay: Mean Across All Paraphrasers<br>"
+                      "<sup>Structural skeleton vs Lexical skin (normalized to T0=1.0)</sup>",
+                xaxis_title="Iteration", yaxis_title="Relative Value (T0 = 1.0)",
+                template="plotly_white", height=420,
+                legend=dict(orientation="h", y=-0.2, font=dict(size=12)),
+                margin=dict(t=70, b=80),
+            )
             st.plotly_chart(fig_norm, width="stretch")
         else:
-            norm_long = norm_para_df.melt(
-                id_vars=["Iteration", "paraphraser"], var_name="Metric", value_name="Normalized Value"
+            # Single chart: color=paraphraser, solid=dep-depth, dashed=RTTR
+            fig_norm = go.Figure()
+            paraphrasers_sorted = sorted(norm_para_df["paraphraser"].unique())
+            palette = PARA_PALETTE
+            for i, para in enumerate(paraphrasers_sorted):
+                color = palette[i % len(palette)]
+                pdata = norm_para_df[norm_para_df["paraphraser"] == para].set_index("Iteration").reindex(iter_order)
+                fig_norm.add_trace(go.Scatter(
+                    x=iter_order, y=pdata["Structural (Dep-Depth)"].tolist(),
+                    mode="lines+markers", name=f"{para} dep-depth",
+                    line=dict(color=color, width=1.8, dash="solid"),
+                    marker=dict(size=6, color=color),
+                    legendgroup=para, showlegend=True,
+                ))
+                fig_norm.add_trace(go.Scatter(
+                    x=iter_order, y=pdata["Lexical (RTTR)"].tolist(),
+                    mode="lines+markers", name=f"{para} RTTR",
+                    line=dict(color=color, width=1.8, dash="dash"),
+                    marker=dict(size=6, color=color),
+                    legendgroup=para, showlegend=True,
+                ))
+            fig_norm.add_hline(y=1.0, line_dash="dot", line_color="#94A3B8", line_width=1,
+                               annotation_text="T0 baseline", annotation_position="top left",
+                               annotation_font=dict(color="#94A3B8", size=11))
+            fig_norm.update_layout(
+                title="Multi-Modal Decay: All Paraphrasers<br>"
+                      "<sup>Solid = dep-depth (struct), Dashed = RTTR (lexical) — Normalized to T0 = 1.0</sup>",
+                xaxis_title="Iteration", yaxis_title="Relative Value (T0 = 1.0)",
+                template="plotly_white", height=460,
+                legend=dict(orientation="h", y=-0.3, font=dict(size=10), tracegroupgap=4),
+                margin=dict(t=70, b=110),
             )
-            fig_norm = px.line(
-                norm_long, x="Iteration", y="Normalized Value",
-                color="paraphraser", facet_col="Metric", markers=True,
-                title="Structural vs. Lexical Decay per Paraphraser (Normalized to T0 = 1.0)",
-                labels={"Iteration": "Iteration", "Normalized Value": "Relative to T0", "paraphraser": "Paraphraser"},
-                color_discrete_sequence=PARA_PALETTE,
-            )
-            fig_norm.add_hline(y=1.0, line_dash="dot", line_color="#94A3B8", line_width=1)
-            fig_norm.update_traces(line=dict(width=2), marker=dict(size=7))
-            fig_norm.update_layout(template="plotly_white", height=420,
-                                   legend=dict(orientation="h", y=-0.25, font=dict(size=11)),
-                                   margin=dict(t=60, b=80))
-            fig_norm.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
             st.plotly_chart(fig_norm, width="stretch")
 
         st.markdown(
