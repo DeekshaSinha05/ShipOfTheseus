@@ -212,11 +212,13 @@ def main():
     st.markdown(CSS, unsafe_allow_html=True)
     summary = load_summary_stats()
 
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "Overview",
         "Datasets",
         "Style Decay",
-        "Style-Drift Explorer",
+        "Drift Explorer",
+        "Attribution",
+        "Stylometry",
     ])
 
     # ── TAB 1 — OVERVIEW ────────────────────────────────────────────────────────
@@ -225,10 +227,10 @@ def main():
         st.caption("Ship of Theseus Paraphrased Corpus  ·  NLP Research Defense  ·  April 2026")
         st.divider()
 
-        n_docs      = summary.get("n_documents", 0)
-        sbert_t3    = summary.get("mean_sbert_t3")
-        pos_t3      = summary.get("mean_pos_cos_t3")
-        n_paraphrasers = len(summary.get("paraphrasers", []))
+        n_docs   = summary.get("n_documents", 0)
+        sbert_t3 = summary.get("mean_sbert_t3")
+        f1_t0    = summary.get("attr_f1_t0")
+        f1_t3    = summary.get("attr_f1_t3")
 
         c1, c2, c3, c4 = st.columns(4)
         with c1:
@@ -239,22 +241,23 @@ def main():
             v = f"{sbert_t3:.4f}" if sbert_t3 is not None else "—"
             st.markdown(
                 f'<div class="kpi"><div class="kpi-lbl">Mean SBERT Cosine @ T3</div>'
-                f'<div class="kpi-val">{v}</div>'
-                f'<div class="kpi-delta" style="color:#64748B;">semantic similarity</div></div>',
-                unsafe_allow_html=True)
+                f'<div class="kpi-val">{v}</div></div>', unsafe_allow_html=True)
         with c3:
-            v = f"{pos_t3:.4f}" if pos_t3 is not None else "—"
+            v = f"{f1_t0:.4f}" if f1_t0 is not None else "—"
             st.markdown(
-                f'<div class="kpi"><div class="kpi-lbl">Mean POS Cosine @ T3</div>'
-                f'<div class="kpi-val">{v}</div>'
-                f'<div class="kpi-delta" style="color:#64748B;">syntactic stability</div></div>',
-                unsafe_allow_html=True)
+                f'<div class="kpi"><div class="kpi-lbl">Attribution F1 @ T0</div>'
+                f'<div class="kpi-val">{v}</div></div>', unsafe_allow_html=True)
         with c4:
+            v = f"{f1_t3:.4f}" if f1_t3 is not None else "—"
+            delta = ""
+            if f1_t0 is not None and f1_t3 is not None:
+                d = f1_t3 - f1_t0
+                col = "#059669" if d >= 0 else "#DC2626"
+                arrow = "▲" if d >= 0 else "▼"
+                delta = f'<div class="kpi-delta" style="color:{col};">{arrow} {abs(d):.4f}</div>'
             st.markdown(
-                f'<div class="kpi"><div class="kpi-lbl">Paraphrasing Systems</div>'
-                f'<div class="kpi-val">{n_paraphrasers}</div>'
-                f'<div class="kpi-delta" style="color:#64748B;">across 7 corpora · 3 iterations</div></div>',
-                unsafe_allow_html=True)
+                f'<div class="kpi"><div class="kpi-lbl">Attribution F1 @ T3</div>'
+                f'<div class="kpi-val">{v}</div>{delta}</div>', unsafe_allow_html=True)
 
         st.divider()
 
@@ -282,25 +285,6 @@ does the text ultimately bear?*
             st.markdown("**Corpora:** " + "  ·  ".join(f"`{d}`" for d in datasets))
         with col_par:
             st.markdown("**Paraphrasers:** " + "  ·  ".join(f"`{p}`" for p in paraphrasers))
-
-        st.divider()
-        st.markdown("#### Key Findings")
-        ka, kb = st.columns(2)
-        with ka:
-            st.markdown(
-                '<div class="callout"><strong>No Point of No Return —</strong> '
-                'Authorship attribution F1 never drops below the 0.55 threshold across all three iterations. '
-                'A Point of Maximum Contrast emerges at T1: as paraphrasers collapse multi-source diversity into a single style, '
-                'human-authored texts become paradoxically <em>more</em> identifiable.</div>',
-                unsafe_allow_html=True)
-        with kb:
-            st.markdown(
-                '<div class="insight"><strong>Paraphraser Fingerprints —</strong> '
-                'Each paraphrasing system leaves a forensically detectable stylometric signature '
-                'identifiable from surface features alone at <strong>2.6× above chance</strong>. '
-                'The syntactic skeleton (dep-depth) outlasts vocabulary (RTTR) under iterative rewriting — '
-                'grammatical structure is the last identity signal to erode.</div>',
-                unsafe_allow_html=True)
 
     # ── TAB 2 — DATASETS ────────────────────────────────────────────────────────
     with tab2:
@@ -424,7 +408,7 @@ does the text ultimately bear?*
                 fig.update_layout(template="plotly_white", height=360,
                                   coloraxis_showscale=False, showlegend=False,
                                   margin=dict(t=50, b=40))
-                st.plotly_chart(fig, width="stretch")
+                st.plotly_chart(fig, use_container_width=True)
 
             with cb:
                 src_rows = []
@@ -442,7 +426,7 @@ does the text ultimately bear?*
                     fig.update_layout(template="plotly_white", height=360,
                                       legend=dict(orientation="h", y=-0.3, font=dict(size=11)),
                                       margin=dict(t=50, b=80))
-                    st.plotly_chart(fig, width="stretch")
+                    st.plotly_chart(fig, use_container_width=True)
 
     # ── TAB 3 — STYLE DECAY ─────────────────────────────────────────────────────
     with tab3:
@@ -457,11 +441,11 @@ does the text ultimately bear?*
         with c1:
             st.plotly_chart(
                 drift_chart(pos_stats, "Syntactic Structure Stability (POS Cosine)", "#3B82F6", 0.85),
-                width="stretch")
+                use_container_width=True)
         with c2:
             st.plotly_chart(
                 drift_chart(sbert_stats, "Semantic Identity Drift (SBERT Cosine)", "#EF4444", 0.55),
-                width="stretch")
+                use_container_width=True)
 
         st.divider()
 
@@ -481,7 +465,7 @@ does the text ultimately bear?*
             fig.update_layout(template="plotly_white", height=350,
                               legend=dict(orientation="h", y=-0.3, font=dict(size=11)),
                               margin=dict(t=50, b=80))
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
 
         with c4:
             fig = px.line(
@@ -493,7 +477,7 @@ does the text ultimately bear?*
             fig.update_layout(template="plotly_white", height=350,
                               legend=dict(orientation="h", y=-0.3, font=dict(size=11)),
                               margin=dict(t=50, b=80))
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
 
         st.divider()
         st.markdown("#### Multi-Modal Decay — Normalized to T0")
@@ -534,7 +518,7 @@ does the text ultimately bear?*
         fig_norm.update_layout(template="plotly_white", height=380,
                                legend=dict(orientation="h", y=-0.25, font=dict(size=12)),
                                margin=dict(t=55, b=80))
-        st.plotly_chart(fig_norm, width="stretch")
+        st.plotly_chart(fig_norm, use_container_width=True)
 
         st.markdown(
             '<div class="insight"><strong>Key Finding —</strong> '
@@ -542,17 +526,16 @@ does the text ultimately bear?*
             'confirming that grammatical structure outlasts vocabulary under iterative paraphrasing.</div>',
             unsafe_allow_html=True)
 
-    # ── TAB 4 — STYLE-DRIFT EXPLORER ────────────────────────────────────────────
+    # ── TAB 4 — DRIFT EXPLORER ──────────────────────────────────────────────────
     with tab4:
-        st.title("Style-Drift Explorer")
-        st.markdown("Compare an original document (T0) with its paraphrased versions — and see how style drifts across iterations.")
+        st.title("Drift Explorer")
+        st.markdown("Browse how original texts (T0) transform through three rounds of paraphrasing (T3).")
         st.divider()
 
         trajectory_df = load_trajectory()
         tsne_df       = load_tsne_coords()
         sbert_col     = "sbert_cos_t3"
 
-        # ── Filters ───────────────────────────────────────────────────────────
         fc1, fc2, fc3 = st.columns([2, 1, 2])
         with fc1:
             all_ds  = sorted(trajectory_df["dataset"].dropna().unique().tolist())
@@ -576,22 +559,7 @@ does the text ultimately bear?*
             filt = filt[filt[sbert_col].between(sbert_range[0], sbert_range[1], inclusive="both")]
 
         st.divider()
-
-        # ── Iteration selector ────────────────────────────────────────────────
-        ITER_COL_MAP = {
-            "T1 — After 1 paraphrase": "chatgpt",
-            "T2 — After 2 paraphrases": "chatgpt_chatgpt",
-            "T3 — After 3 paraphrases": "chatgpt_chatgpt_chatgpt",
-        }
-        sel_iter_label = st.radio(
-            "Compare T0 (original) against:",
-            list(ITER_COL_MAP.keys()),
-            index=2, horizontal=True, key="ex_iter",
-        )
-        sel_iter_col = ITER_COL_MAP[sel_iter_label]
-        sel_iter_tag = sel_iter_label.split(" — ")[0]
-
-        st.subheader(f"Original (T0) vs. {sel_iter_label}")
+        st.subheader("Original vs. Paraphrase (T0 / T3)")
 
         if filt.empty:
             st.warning("No records match the current filters. Broaden the selection or SBERT range.")
@@ -610,7 +578,7 @@ does the text ultimately bear?*
             m1, m2, m3 = st.columns(3)
             m1.markdown(f"**Corpus:** `{row.get('dataset', '—')}`")
             m2.markdown(f"**Source Group:** `{row.get('src_group', '—')}`")
-            score = row.get(sbert_col) if sel_iter_tag == "T3" else None
+            score = row.get(sbert_col)
             if score is not None and not pd.isna(score):
                 sc = "#10B981" if score > 0.85 else "#F59E0B" if score > 0.70 else "#EF4444"
                 m3.markdown(
@@ -623,27 +591,20 @@ does the text ultimately bear?*
                 st.markdown('<span style="font-weight:600;color:#3B82F6;">T0 — Original</span>',
                             unsafe_allow_html=True)
                 st.text_area("t0", value=str(row.get("original", ""))[:3000] or "(empty)",
-                             height=300, disabled=True, label_visibility="collapsed")
+                             height=280, disabled=True, label_visibility="collapsed")
             with sep:
-                st.markdown("<br>" * 9, unsafe_allow_html=True)
+                st.markdown("<br>" * 8, unsafe_allow_html=True)
                 if score is not None and not pd.isna(score):
                     st.markdown(
                         f'<div style="text-align:center;">'
                         f'<span style="font-size:.7rem;color:#94A3B8;">SBERT</span><br>'
                         f'<span style="font-size:1.4rem;font-weight:700;color:{sc};">{score:.3f}</span>'
                         f'</div>', unsafe_allow_html=True)
-                else:
-                    st.markdown(
-                        f'<div style="text-align:center;margin-top:2rem;">'
-                        f'<span style="font-size:1.6rem;">→</span></div>',
-                        unsafe_allow_html=True)
             with tc2:
-                st.markdown(
-                    f'<span style="font-weight:600;color:#EF4444;">{sel_iter_tag} — Paraphrased</span>',
-                    unsafe_allow_html=True)
-                para_text = str(row.get(sel_iter_col, ""))[:3000] or "(empty)"
-                st.text_area("para", value=para_text,
-                             height=300, disabled=True, label_visibility="collapsed")
+                st.markdown('<span style="font-weight:600;color:#EF4444;">T3 — Paraphrase</span>',
+                            unsafe_allow_html=True)
+                st.text_area("t3", value=str(row.get("chatgpt_chatgpt_chatgpt", ""))[:3000] or "(empty)",
+                             height=280, disabled=True, label_visibility="collapsed")
 
         st.divider()
         st.subheader("Embedding Space (t-SNE)")
@@ -673,8 +634,201 @@ does the text ultimately bear?*
             fig.update_layout(template="plotly_white", height=480,
                               legend=dict(orientation="h", y=1.04, x=1, xanchor="right"),
                               margin=dict(t=55, b=40))
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
 
+    # ── TAB 5 — ATTRIBUTION ─────────────────────────────────────────────────────
+    with tab5:
+        st.title("Authorship Attribution Decay")
+        st.markdown("At what iteration does attribution performance drop below a meaningful threshold?")
+        st.divider()
+
+        attr_wide   = load_attribution_f1()
+        clf_results = load_clf_results()
+        ds_f1       = load_ds_fingerprint_f1()
+        ponr        = summary.get("ponr_threshold", 0.55)
+
+        # Normalise column names (strip BOM / whitespace that Cloud CSV readers may add)
+        attr_wide = attr_wide.copy()
+        attr_wide.columns = [c.strip().lstrip("\ufeff") for c in attr_wide.columns]
+        iter_cols = [c for c in ["T0", "T1", "T2", "T3"] if c in attr_wide.columns]
+
+        if iter_cols:
+            # Wide format: paraphraser | T0 | T1 | T2 | T3
+            id_col    = next((c for c in attr_wide.columns if c not in iter_cols), attr_wide.columns[0])
+            attr_long = attr_wide.melt(id_vars=id_col, value_vars=iter_cols,
+                                       var_name="iteration", value_name="f1")
+            attr_long = attr_long.rename(columns={id_col: "paraphraser"})
+        else:
+            # Legacy format: iteration | f1
+            attr_long = attr_wide.rename(columns={attr_wide.columns[0]: "iteration",
+                                                   attr_wide.columns[1]: "f1"})
+            attr_long["paraphraser"] = "mean"
+            iter_cols = [c for c in ["T0", "T1", "T2", "T3"] if c in attr_long["iteration"].values]
+
+        attr_mean = attr_long.groupby("iteration", sort=False)["f1"].mean().reindex(iter_cols).reset_index()
+        attr_mean.columns = ["iteration", "f1"]
+
+        fig_f1 = go.Figure()
+        # Per-paraphraser light traces
+        for para, grp in attr_long.groupby("paraphraser"):
+            grp = grp.set_index("iteration").reindex(iter_cols).reset_index()
+            fig_f1.add_trace(go.Scatter(
+                x=grp["iteration"], y=grp["f1"],
+                mode="lines", name=para, opacity=0.35,
+                line=dict(width=1.2, dash="dot"),
+                hovertemplate=f"{para}: %{{y:.3f}}<extra></extra>",
+            ))
+        # Mean line
+        marker_colors = [ITER_COLORS.get(it, "#888") for it in attr_mean["iteration"]]
+        fig_f1.add_trace(go.Scatter(
+            x=attr_mean["iteration"], y=attr_mean["f1"],
+            mode="lines+markers", name="Mean F1",
+            line=dict(color="#3B82F6", width=3),
+            marker=dict(size=11, color=marker_colors, line=dict(width=1.5, color="white")),
+        ))
+        fig_f1.add_hline(y=ponr, line_dash="dash", line_color="#EF4444", line_width=1.5,
+            annotation_text=f"Threshold  (F1 = {ponr})",
+            annotation_position="top right",
+            annotation_font=dict(color="#EF4444", size=12))
+        below_mean = attr_mean[attr_mean["f1"] < ponr]
+        if not below_mean.empty:
+            rb = below_mean.iloc[0]
+            fig_f1.add_annotation(
+                x=rb["iteration"], y=rb["f1"],
+                text=f"Mean below threshold @ {rb['iteration']}",
+                showarrow=True, arrowhead=2, arrowcolor="#EF4444",
+                font=dict(color="#EF4444", size=11), ax=60, ay=-40)
+        fig_f1.update_layout(
+            title="Authorship Attribution F1 Across Iterations",
+            xaxis_title="Iteration", yaxis_title="Macro F1",
+            yaxis=dict(range=[0.0, 1.0], gridcolor="#F1F5F9"),
+            xaxis=dict(gridcolor="#F1F5F9"),
+            template="plotly_white", height=420,
+            legend=dict(orientation="h", y=-0.2, font=dict(size=11)),
+            margin=dict(t=55, b=80))
+        st.plotly_chart(fig_f1, use_container_width=True)
+
+        st.divider()
+        ca, cb = st.columns(2)
+
+        with ca:
+            clf_names = list(clf_results.keys())
+            clf_means = [clf_results[k]["mean"] for k in clf_names]
+            clf_stds  = [clf_results[k]["std"]  for k in clf_names]
+            fig = go.Figure(go.Bar(
+                x=clf_names, y=clf_means,
+                error_y=dict(type="data", array=clf_stds, visible=True, thickness=1.5, width=6),
+                marker_color=["#3B82F6", "#10B981"],
+                text=[f"{v:.3f}" for v in clf_means], textposition="outside",
+            ))
+            fig.update_layout(
+                title="Fingerprinting Classifier Comparison (F1)",
+                xaxis_title="Classifier", yaxis_title="Macro F1",
+                yaxis=dict(range=[0.0, max(clf_means) * 1.35 if clf_means else 1.0],
+                           gridcolor="#F1F5F9"),
+                template="plotly_white", height=370,
+                showlegend=False, margin=dict(t=50, b=45))
+            st.plotly_chart(fig, use_container_width=True)
+
+        with cb:
+            valid_ds = {k: v for k, v in ds_f1.items() if v is not None}
+            if valid_ds:
+                fig = px.bar(
+                    x=list(valid_ds.keys()), y=list(valid_ds.values()),
+                    title="Per-Corpus Fingerprinting F1 (Random Forest)",
+                    labels={"x": "Corpus", "y": "Macro F1"},
+                    color=list(valid_ds.values()), color_continuous_scale="Blues",
+                    text=[f"{v:.3f}" for v in valid_ds.values()],
+                )
+                fig.update_traces(textposition="outside")
+                fig.update_layout(
+                    yaxis=dict(range=[0.0, max(valid_ds.values()) * 1.35],
+                               gridcolor="#F1F5F9"),
+                    template="plotly_white", height=370,
+                    showlegend=False, coloraxis_showscale=False, margin=dict(t=50, b=45))
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("Per-corpus F1 data unavailable.")
+
+        st.markdown(
+            '<div class="callout"><strong>Finding —</strong> '
+            'Attribution F1 never drops below the 0.55 threshold at any iteration — there is no Point of No Return. '
+            'Instead, a Point of Maximum Contrast emerges at T1 as multi-source paraphraser diversity collapses into a '
+            'single style, making human-authored texts paradoxically more identifiable. Each paraphrasing system also '
+            'leaves its own detectable stylometric fingerprint, identifiable from surface features alone at '
+            '2.6× above chance.</div>',
+            unsafe_allow_html=True)
+
+    # ── TAB 6 — STYLOMETRY ──────────────────────────────────────────────────────
+    with tab6:
+        st.title("Forensic Stylometry")
+        st.markdown("Do different paraphrasing systems leave distinct, detectable stylistic signatures?")
+        st.divider()
+
+        fp_df     = load_fingerprint_features()
+        feat_cols = [c for c in ["ttr", "avg_sent_len", "hapax_rate", "noun_rate", "verb_rate"]
+                     if c in fp_df.columns]
+
+        ca, cb = st.columns(2)
+        with ca:
+            fig = px.histogram(
+                fp_df, x="ttr", color="label",
+                nbins=60, opacity=0.55, barmode="overlay",
+                title="Type-Token Ratio Distribution by Paraphraser",
+                labels={"ttr": "Type-Token Ratio (TTR)", "label": "Paraphraser"},
+                color_discrete_sequence=PARA_PALETTE,
+            )
+            fig.update_layout(template="plotly_white", height=380,
+                              legend=dict(orientation="h", y=-0.3, font=dict(size=11)),
+                              margin=dict(t=50, b=80))
+            st.plotly_chart(fig, use_container_width=True)
+
+        with cb:
+            mean_feats = fp_df.groupby("label")[feat_cols].mean().reset_index()
+            mean_long  = mean_feats.melt(id_vars="label", var_name="Feature", value_name="Mean Value")
+            fig = px.bar(
+                mean_long, x="Feature", y="Mean Value", color="label", barmode="group",
+                title="Mean Lexical Features per Paraphraser",
+                labels={"Mean Value": "Mean Value", "label": "Paraphraser"},
+                color_discrete_sequence=PARA_PALETTE,
+            )
+            fig.update_layout(template="plotly_white", height=380,
+                              legend=dict(orientation="h", y=-0.3, font=dict(size=11)),
+                              margin=dict(t=50, b=80))
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.divider()
+
+        cc, cd = st.columns(2)
+        with cc:
+            fig = px.box(
+                fp_df, x="label", y="avg_sent_len",
+                title="Sentence Length Distribution by Paraphraser",
+                labels={"label": "Paraphraser", "avg_sent_len": "Avg Sentence Length (words)"},
+                color="label", color_discrete_sequence=PARA_PALETTE,
+            )
+            fig.update_layout(template="plotly_white", height=380,
+                              showlegend=False, margin=dict(t=50, b=45))
+            st.plotly_chart(fig, use_container_width=True)
+
+        with cd:
+            fig = px.box(
+                fp_df, x="label", y="hapax_rate",
+                title="Hapax Rate Distribution by Paraphraser",
+                labels={"label": "Paraphraser", "hapax_rate": "Hapax Rate"},
+                color="label", color_discrete_sequence=PARA_PALETTE,
+            )
+            fig.update_layout(template="plotly_white", height=380,
+                              showlegend=False, margin=dict(t=50, b=45))
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown(
+            '<div class="insight"><strong>Finding —</strong> '
+            'Despite operating on the same source texts, each paraphrasing system produces '
+            'statistically distinct distributions in TTR, sentence length, and hapax rate — '
+            'confirming that stylometric fingerprinting can reliably identify the rewriting system '
+            'even when surface semantics are preserved.</div>',
+            unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
