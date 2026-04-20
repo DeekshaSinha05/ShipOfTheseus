@@ -330,8 +330,8 @@ does the text ultimately bear?*
                       <div class="ds-meta">{info['source']} &nbsp;·&nbsp; {info['domain']}</div>
                       <div class="ds-body">{info['description']}</div>
                       <div style="display:flex;gap:2rem;">
-                        <div><div class="stat-lbl">Unique Docs</div><div class="stat-val">{n_docs:,}</div></div>
-                        <div><div class="stat-lbl">Total Rows</div><div class="stat-val">{n_rows:,}</div></div>
+                        <div><div class="stat-lbl">Unique Docs</div><div class="stat-val">{f'{n_docs:,}' if isinstance(n_docs, int) else n_docs}</div></div>
+                        <div><div class="stat-lbl">Total Rows</div><div class="stat-val">{f'{n_rows:,}' if isinstance(n_rows, int) else n_rows}</div></div>
                         <div><div class="stat-lbl">Mean Words</div><div class="stat-val">{words}</div></div>
                       </div>
                     </div>""", unsafe_allow_html=True)
