@@ -103,25 +103,6 @@ def load_fingerprint_features() -> pd.DataFrame:
     return pd.read_csv(f"{ASSETS}/fingerprint_features.csv")
 
 
-def _wide_to_long(df: pd.DataFrame, value_label: str) -> pd.DataFrame:
-    """Convert paraphraser-wide CSV (paraphraser, T1, T2, T3) to long format.
-    Prepends a T0 = 1.0 baseline row per paraphraser."""
-    df = df.copy()
-    df.columns = [str(c).strip().lstrip("\ufeff") for c in df.columns]
-    id_col = df.columns[0]
-    # Match any column whose name is T followed by a digit
-    t_cols = sorted([c for c in df.columns[1:] if len(c) == 2 and c[0] == "T" and c[1].isdigit()])
-    if not t_cols:
-        return pd.DataFrame(columns=["paraphraser", "iteration", value_label])
-    long = df.melt(id_vars=id_col, value_vars=t_cols,
-                   var_name="iteration", value_name=value_label)
-    long = long.rename(columns={id_col: "paraphraser"})
-    t0 = pd.DataFrame({"paraphraser": df[id_col].values,
-                        "iteration": "T0",
-                        value_label: 1.0})
-    return pd.concat([t0, long], ignore_index=True)
-
-
 def compute_drift_stats(df: pd.DataFrame) -> pd.DataFrame:
     rows = [{"Iteration": "T0", "Mean": 1.0, "Std": 0.0}]
     for col in ["T1", "T2", "T3"]:
@@ -453,65 +434,18 @@ does the text ultimately bear?*
         st.markdown("Tracking syntactic structure and semantic similarity across paraphrase iterations.")
         st.divider()
 
-        view_mode = st.radio(
-            "View mode",
-            ["Individual (per paraphraser)", "Aggregate (mean ± std)"],
-            horizontal=True, key="decay_view",
-        )
-        aggregate = view_mode.startswith("Aggregate")
-
-        pos_df   = load_pos_cosine_drift()
-        sbert_df = load_sbert_cosine_drift()
+        pos_stats   = compute_drift_stats(load_pos_cosine_drift())
+        sbert_stats = compute_drift_stats(load_sbert_cosine_drift())
 
         c1, c2 = st.columns(2)
-        if aggregate:
-            pos_stats   = compute_drift_stats(pos_df)
-            sbert_stats = compute_drift_stats(sbert_df)
-            with c1:
-                st.plotly_chart(
-                    drift_chart(pos_stats, "Syntactic Structure Stability (POS Cosine) — Mean ± SD", "#3B82F6", 0.85),
-                    use_container_width=True)
-            with c2:
-                st.plotly_chart(
-                    drift_chart(sbert_stats, "Semantic Identity Drift (SBERT Cosine) — Mean ± SD", "#EF4444", 0.55),
-                    use_container_width=True)
-        else:
-            _ord_map = {v: i for i, v in enumerate(ITER_ORDER)}
-
-            pos_long   = _wide_to_long(pos_df,   "POS Cosine")
-            sbert_long = _wide_to_long(sbert_df, "SBERT Cosine")
-            pos_long   = pos_long.assign(_o=pos_long["iteration"].map(_ord_map)).sort_values(["paraphraser","_o"]).drop(columns="_o").reset_index(drop=True)
-            sbert_long = sbert_long.assign(_o=sbert_long["iteration"].map(_ord_map)).sort_values(["paraphraser","_o"]).drop(columns="_o").reset_index(drop=True)
-
-            with c1:
-                fig = px.line(
-                    pos_long,
-                    x="iteration", y="POS Cosine", color="paraphraser", markers=True,
-                    category_orders={"iteration": ITER_ORDER},
-                    title="Syntactic Structure Stability (POS Cosine) — per Paraphraser",
-                    labels={"iteration": "Iteration", "POS Cosine": "Cosine Similarity",
-                            "paraphraser": "Paraphraser"},
-                    color_discrete_sequence=PARA_PALETTE,
-                )
-                fig.update_layout(template="plotly_white", height=370,
-                                  legend=dict(orientation="h", y=-0.3, font=dict(size=11)),
-                                  margin=dict(t=55, b=80))
-                st.plotly_chart(fig, use_container_width=True)
-
-            with c2:
-                fig = px.line(
-                    sbert_long,
-                    x="iteration", y="SBERT Cosine", color="paraphraser", markers=True,
-                    category_orders={"iteration": ITER_ORDER},
-                    title="Semantic Identity Drift (SBERT Cosine) — per Paraphraser",
-                    labels={"iteration": "Iteration", "SBERT Cosine": "Cosine Similarity",
-                            "paraphraser": "Paraphraser"},
-                    color_discrete_sequence=PARA_PALETTE,
-                )
-                fig.update_layout(template="plotly_white", height=370,
-                                  legend=dict(orientation="h", y=-0.3, font=dict(size=11)),
-                                  margin=dict(t=55, b=80))
-                st.plotly_chart(fig, use_container_width=True)
+        with c1:
+            st.plotly_chart(
+                drift_chart(pos_stats, "Syntactic Structure Stability (POS Cosine)", "#3B82F6", 0.85),
+                use_container_width=True)
+        with c2:
+            st.plotly_chart(
+                drift_chart(sbert_stats, "Semantic Identity Drift (SBERT Cosine)", "#EF4444", 0.55),
+                use_container_width=True)
 
         st.divider()
 
@@ -521,69 +455,29 @@ does the text ultimately bear?*
             ling_df = ling_df.sort_values(["paraphraser", "iteration"])
 
         c3, c4 = st.columns(2)
-        if aggregate:
-            agg3 = ling_df.groupby("iteration", observed=True)[["RTTR", "N Words"]].agg(["mean","std"]).reset_index()
-            with c3:
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=agg3["iteration"],
-                    y=agg3[("RTTR","mean")] - agg3[("RTTR","std")],
-                    mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
-                fig.add_trace(go.Scatter(x=agg3["iteration"],
-                    y=agg3[("RTTR","mean")] + agg3[("RTTR","std")],
-                    mode="lines", line=dict(width=0), fill="tonexty",
-                    fillcolor="rgba(59,130,246,0.12)", name="± 1 SD", hoverinfo="skip"))
-                fig.add_trace(go.Scatter(x=agg3["iteration"], y=agg3[("RTTR","mean")],
-                    mode="lines+markers", name="Mean RTTR",
-                    line=dict(color="#3B82F6", width=2.5), marker=dict(size=8)))
-                fig.update_layout(title="Root Type-Token Ratio — Mean ± SD",
-                    xaxis_title="Iteration", yaxis_title="RTTR",
-                    template="plotly_white", height=350,
-                    legend=dict(orientation="h", y=-0.25, font=dict(size=11)),
-                    margin=dict(t=50, b=80))
-                st.plotly_chart(fig, use_container_width=True)
+        with c3:
+            fig = px.line(
+                ling_df, x="iteration", y="RTTR", color="paraphraser", markers=True,
+                title="Root Type-Token Ratio per Paraphraser (T0 → T3)",
+                labels={"RTTR": "RTTR", "iteration": "Iteration", "paraphraser": "Paraphraser"},
+                color_discrete_sequence=PARA_PALETTE,
+            )
+            fig.update_layout(template="plotly_white", height=350,
+                              legend=dict(orientation="h", y=-0.3, font=dict(size=11)),
+                              margin=dict(t=50, b=80))
+            st.plotly_chart(fig, use_container_width=True)
 
-            with c4:
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=agg3["iteration"],
-                    y=agg3[("N Words","mean")] - agg3[("N Words","std")],
-                    mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip"))
-                fig.add_trace(go.Scatter(x=agg3["iteration"],
-                    y=agg3[("N Words","mean")] + agg3[("N Words","std")],
-                    mode="lines", line=dict(width=0), fill="tonexty",
-                    fillcolor="rgba(16,185,129,0.12)", name="± 1 SD", hoverinfo="skip"))
-                fig.add_trace(go.Scatter(x=agg3["iteration"], y=agg3[("N Words","mean")],
-                    mode="lines+markers", name="Mean Word Count",
-                    line=dict(color="#10B981", width=2.5), marker=dict(size=8)))
-                fig.update_layout(title="Mean Word Count — Mean ± SD",
-                    xaxis_title="Iteration", yaxis_title="Word Count",
-                    template="plotly_white", height=350,
-                    legend=dict(orientation="h", y=-0.25, font=dict(size=11)),
-                    margin=dict(t=50, b=80))
-                st.plotly_chart(fig, use_container_width=True)
-        else:
-            with c3:
-                fig = px.line(
-                    ling_df, x="iteration", y="RTTR", color="paraphraser", markers=True,
-                    title="Root Type-Token Ratio per Paraphraser (T0 → T3)",
-                    labels={"RTTR": "RTTR", "iteration": "Iteration", "paraphraser": "Paraphraser"},
-                    color_discrete_sequence=PARA_PALETTE,
-                )
-                fig.update_layout(template="plotly_white", height=350,
-                                  legend=dict(orientation="h", y=-0.3, font=dict(size=11)),
-                                  margin=dict(t=50, b=80))
-                st.plotly_chart(fig, use_container_width=True)
-
-            with c4:
-                fig = px.line(
-                    ling_df, x="iteration", y="N Words", color="paraphraser", markers=True,
-                    title="Mean Word Count per Paraphraser (T0 → T3)",
-                    labels={"N Words": "Word Count", "iteration": "Iteration", "paraphraser": "Paraphraser"},
-                    color_discrete_sequence=PARA_PALETTE,
-                )
-                fig.update_layout(template="plotly_white", height=350,
-                                  legend=dict(orientation="h", y=-0.3, font=dict(size=11)),
-                                  margin=dict(t=50, b=80))
-                st.plotly_chart(fig, use_container_width=True)
+        with c4:
+            fig = px.line(
+                ling_df, x="iteration", y="N Words", color="paraphraser", markers=True,
+                title="Mean Word Count per Paraphraser (T0 → T3)",
+                labels={"N Words": "Word Count", "iteration": "Iteration", "paraphraser": "Paraphraser"},
+                color_discrete_sequence=PARA_PALETTE,
+            )
+            fig.update_layout(template="plotly_white", height=350,
+                              legend=dict(orientation="h", y=-0.3, font=dict(size=11)),
+                              margin=dict(t=50, b=80))
+            st.plotly_chart(fig, use_container_width=True)
 
         st.divider()
         st.markdown("#### Multi-Modal Decay — Normalized to T0")
