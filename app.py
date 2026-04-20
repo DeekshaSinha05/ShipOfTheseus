@@ -424,7 +424,7 @@ does the text ultimately bear?*
                 fig.update_layout(template="plotly_white", height=360,
                                   coloraxis_showscale=False, showlegend=False,
                                   margin=dict(t=50, b=40))
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
             with cb:
                 src_rows = []
@@ -442,7 +442,7 @@ does the text ultimately bear?*
                     fig.update_layout(template="plotly_white", height=360,
                                       legend=dict(orientation="h", y=-0.3, font=dict(size=11)),
                                       margin=dict(t=50, b=80))
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width="stretch")
 
     # ── TAB 3 — STYLE DECAY ─────────────────────────────────────────────────────
     with tab3:
@@ -457,11 +457,11 @@ does the text ultimately bear?*
         with c1:
             st.plotly_chart(
                 drift_chart(pos_stats, "Syntactic Structure Stability (POS Cosine)", "#3B82F6", 0.85),
-                use_container_width=True)
+                width="stretch")
         with c2:
             st.plotly_chart(
                 drift_chart(sbert_stats, "Semantic Identity Drift (SBERT Cosine)", "#EF4444", 0.55),
-                use_container_width=True)
+                width="stretch")
 
         st.divider()
 
@@ -481,7 +481,7 @@ does the text ultimately bear?*
             fig.update_layout(template="plotly_white", height=350,
                               legend=dict(orientation="h", y=-0.3, font=dict(size=11)),
                               margin=dict(t=50, b=80))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         with c4:
             fig = px.line(
@@ -493,7 +493,7 @@ does the text ultimately bear?*
             fig.update_layout(template="plotly_white", height=350,
                               legend=dict(orientation="h", y=-0.3, font=dict(size=11)),
                               margin=dict(t=50, b=80))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         st.divider()
         st.markdown("#### Multi-Modal Decay — Normalized to T0")
@@ -534,7 +534,7 @@ does the text ultimately bear?*
         fig_norm.update_layout(template="plotly_white", height=380,
                                legend=dict(orientation="h", y=-0.25, font=dict(size=12)),
                                margin=dict(t=55, b=80))
-        st.plotly_chart(fig_norm, use_container_width=True)
+        st.plotly_chart(fig_norm, width="stretch")
 
         st.markdown(
             '<div class="insight"><strong>Key Finding —</strong> '
@@ -673,7 +673,7 @@ does the text ultimately bear?*
             fig.update_layout(template="plotly_white", height=480,
                               legend=dict(orientation="h", y=1.04, x=1, xanchor="right"),
                               margin=dict(t=55, b=40))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
 
 
