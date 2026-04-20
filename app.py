@@ -103,6 +103,25 @@ def load_fingerprint_features() -> pd.DataFrame:
     return pd.read_csv(f"{ASSETS}/fingerprint_features.csv")
 
 
+def _wide_to_long(df: pd.DataFrame, value_label: str) -> pd.DataFrame:
+    """Convert paraphraser-wide CSV (paraphraser, T1, T2, T3) to long format.
+    Prepends a T0 = 1.0 baseline row per paraphraser."""
+    df = df.copy()
+    df.columns = [str(c).strip().lstrip("\ufeff") for c in df.columns]
+    id_col = df.columns[0]
+    # Match any column whose name is T followed by a digit
+    t_cols = sorted([c for c in df.columns[1:] if len(c) == 2 and c[0] == "T" and c[1].isdigit()])
+    if not t_cols:
+        return pd.DataFrame(columns=["paraphraser", "iteration", value_label])
+    long = df.melt(id_vars=id_col, value_vars=t_cols,
+                   var_name="iteration", value_name=value_label)
+    long = long.rename(columns={id_col: "paraphraser"})
+    t0 = pd.DataFrame({"paraphraser": df[id_col].values,
+                        "iteration": "T0",
+                        value_label: 1.0})
+    return pd.concat([t0, long], ignore_index=True)
+
+
 def compute_drift_stats(df: pd.DataFrame) -> pd.DataFrame:
     rows = [{"Iteration": "T0", "Mean": 1.0, "Std": 0.0}]
     for col in ["T1", "T2", "T3"]:
@@ -457,24 +476,11 @@ does the text ultimately bear?*
                     drift_chart(sbert_stats, "Semantic Identity Drift (SBERT Cosine) — Mean ± SD", "#EF4444", 0.55),
                     use_container_width=True)
         else:
-            iter_order = ["T0", "T1", "T2", "T3"]
-            # Melt wide CSVs (paraphraser, T1, T2, T3) → long, prepend T0=1.0 per paraphraser
-            def _to_long(df: pd.DataFrame, label: str) -> pd.DataFrame:
-                df = df.copy()
-                df.columns = [c.strip().lstrip("\ufeff") for c in df.columns]
-                id_col = df.columns[0]
-                t_cols = [c for c in ["T1", "T2", "T3"] if c in df.columns]
-                long   = df.melt(id_vars=id_col, value_vars=t_cols,
-                                 var_name="iteration", value_name=label)
-                long   = long.rename(columns={id_col: "paraphraser"})
-                t0     = pd.DataFrame({"paraphraser": df[id_col], "iteration": "T0", label: 1.0})
-                return pd.concat([t0, long], ignore_index=True)
-
-            pos_long   = _to_long(pos_df,   "POS Cosine")
-            sbert_long = _to_long(sbert_df, "SBERT Cosine")
-            for df_long in [pos_long, sbert_long]:
-                df_long["iteration"] = pd.Categorical(df_long["iteration"],
-                                                      categories=iter_order, ordered=True)
+            pos_long   = _wide_to_long(pos_df,   "POS Cosine")
+            sbert_long = _wide_to_long(sbert_df, "SBERT Cosine")
+            for _dl in [pos_long, sbert_long]:
+                _dl["iteration"] = pd.Categorical(_dl["iteration"],
+                                                  categories=ITER_ORDER, ordered=True)
 
             with c1:
                 fig = px.line(
