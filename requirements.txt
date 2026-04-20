@@ -1,5 +1,5 @@
 numpy
 pandas
 plotly
-streamlit
+streamlit==1.51.0
 huggingface_hub
