@@ -236,7 +236,7 @@ def main():
         with c1:
             st.markdown(
                 f'<div class="kpi"><div class="kpi-lbl">Total Documents</div>'
-                f'<div class="kpi-val">{n_docs:,}</div></div>', unsafe_allow_html=True)
+                f'<div class="kpi-val">{f"{n_docs:,}" if isinstance(n_docs, int) else n_docs}</div></div>', unsafe_allow_html=True)
         with c2:
             v = f"{sbert_t3:.4f}" if sbert_t3 is not None else "—"
             st.markdown(
@@ -656,7 +656,8 @@ does the text ultimately bear?*
             # Wide format: paraphraser | T0 | T1 | T2 | T3
             id_col    = next((c for c in attr_wide.columns if c not in iter_cols), attr_wide.columns[0])
             attr_long = attr_wide.melt(id_vars=id_col, value_vars=iter_cols,
-                                       var_name="iteration", value_name="f1")
+                                       var_name="iteration", value_name="f1_val")
+            attr_long = attr_long.rename(columns={"f1_val": "f1"})
             attr_long = attr_long.rename(columns={id_col: "paraphraser"})
         else:
             # Legacy format: iteration | f1
